@@ -6,7 +6,7 @@ import os
 import json
 import subprocess
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 # Log directory
 LOG_DIR = "/root/proxyLogs"
@@ -166,52 +166,76 @@ class ProxyServer:
                 elif line.lower().startswith(b'x-proxy-trace-id:'):
                     trace_id = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
 
-            # Check for API endpoint: /api/stream/<video_id>
-            if b'GET /api/stream/' in first_line:
-                try:
-                    path = first_line.split(b' ')[1].decode('utf-8')
-                    video_id = path.split('/api/stream/')[1].split('?')[0]
-                    log(f"🎥 API Request: /api/stream/{video_id} from {real_ip}")
-                    
-                    result = extract_youtube_stream(video_id)
-                    
-                    if result:
-                        response_body = json.dumps(result).encode('utf-8')
-                        response = (
-                            b"HTTP/1.1 200 OK\r\n"
-                            b"Content-Type: application/json\r\n"
-                            b"Access-Control-Allow-Origin: *\r\n"
-                            b"Connection: close\r\n"
-                            b"Content-Length: " + str(len(response_body)).encode() + b"\r\n\r\n"
-                            + response_body
-                        )
-                        log(f"✅ Stream extracted for {video_id}")
-                        log(f"🔗 Stream URL: {result.get('url')}")
-                    else:
-                        error_body = json.dumps({"error": "Failed to extract stream"}).encode('utf-8')
-                        response = (
-                            b"HTTP/1.1 500 Internal Server Error\r\n"
-                            b"Content-Type: application/json\r\n"
-                            b"Connection: close\r\n"
-                            b"Content-Length: " + str(len(error_body)).encode() + b"\r\n\r\n"
-                            + error_body
-                        )
-                        log(f"❌ Failed to extract stream for {video_id}")
-                    
+                except Exception as e:
+                    log(f"❌ API Error: {e}")
+                    # ... error handling ...
                     client_socket.send(response)
                     client_socket.close()
                     return
+
+            # --- Stream Relay Endpoint: /stream?url=... ---
+            if b'GET /stream' in first_line:
+                try:
+                    # Parse URL from query string
+                    path = first_line.split(b' ')[1].decode('utf-8')
+                    parsed = urlparse(path)
+                    qs = parse_qs(parsed.query)
+                    target_url = qs.get('url', [None])[0]
+
+                    if not target_url:
+                        client_socket.close()
+                        return
+
+                    log(f"🔄 Relaying Stream: {target_url[:50]}...")
+
+                    # Parse target info
+                    target_parsed = urlparse(target_url)
+                    hostname = target_parsed.hostname
+                    port = target_parsed.port or 443
+                    target_path = target_parsed.path
+                    if target_parsed.query:
+                        target_path += "?" + target_parsed.query
+
+                    # Connect to Google Video
+                    remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    remote_socket.connect((hostname, port))
+                    
+                    # If HTTPS (likely), wrap socket?
+                    # simple_proxy handles CONNECT for HTTPS, but here we are acting as the client.
+                    # We need SSL for googlevideo.com
+                    if target_parsed.scheme == 'https' or port == 443:
+                        import ssl
+                        ctx = ssl.create_default_context()
+                        ctx.check_hostname = False
+                        ctx.verify_mode = ssl.CERT_NONE
+                        remote_socket = ctx.wrap_socket(remote_socket, server_hostname=hostname)
+
+                    # Rewrite Request Headers
+                    # 1. Change first line to GET /videoplayback...
+                    # 2. Change Host header
+                    new_request_lines = []
+                    new_request_lines.append(f"GET {target_path} HTTP/1.1".encode())
+                    
+                    headers_part = request.split(b'\r\n\r\n')[0]
+                    headers_lines = headers_part.split(b'\r\n')[1:] # Skip first line
+                    
+                    for hline in headers_lines:
+                        if hline.lower().startswith(b'host:'):
+                            new_request_lines.append(f"Host: {hostname}".encode())
+                        else:
+                            new_request_lines.append(hline)
+                    
+                    new_request_lines.append(b"") # Empty line
+                    new_request_lines.append(b"") # End of headers
+                    
+                    remote_socket.send(b'\r\n'.join(new_request_lines))
+                    
+                    # Bridge connection
+                    self.forward_data(client_socket, remote_socket)
+                    return
+
                 except Exception as e:
-                    log(f"❌ API Error: {e}")
-                    error_body = json.dumps({"error": str(e)}).encode('utf-8')
-                    response = (
-                        b"HTTP/1.1 500 Internal Server Error\r\n"
-                        b"Content-Type: application/json\r\n"
-                        b"Connection: close\r\n"
-                        b"Content-Length: " + str(len(error_body)).encode() + b"\r\n\r\n"
-                        + error_body
-                    )
-                    client_socket.send(response)
+                    log(f"❌ Relay Error: {e}")
                     client_socket.close()
                     return
 
