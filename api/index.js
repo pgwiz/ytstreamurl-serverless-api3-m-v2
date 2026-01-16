@@ -68,41 +68,79 @@ function parseNetscapeCookies(content) {
     return cookies;
 }
 
-function createYtdlAgent() {
-    let cookieContent = null;
+// ---------------------------------------------------------
+// PROXY SUPPORT: Import undici ProxyAgent dynamically/safely
+// ---------------------------------------------------------
+import { ProxyAgent } from 'undici';
 
-    // 1. Try Environment Variable
+function createYtdlAgent() {
+    let agentOptions = []; // Arguments for ytdl.createAgent
+
+    // 1. Resolve PROXY
+    // ----------------
+    if (process.env.PROXY) {
+        console.log(`Using Proxy: ${process.env.PROXY}`);
+        const proxyAgent = new ProxyAgent(process.env.PROXY);
+        // ytdl.createAgent(cookies, options)
+        // options: { dispatcher: ... }
+        agentOptions.push(undefined); // First arg is cookies (handled below), set undefined for now
+        agentOptions.push({ dispatcher: proxyAgent });
+    } else {
+        agentOptions.push(undefined);
+        agentOptions.push({});
+    }
+
+    // 2. Resolve COOKIES
+    // ------------------
+    let cookieContent = null;
+    let cookieSource = '';
+
     if (process.env.COOKIES) {
         cookieContent = process.env.COOKIES;
-        // console.log('Using cookies from Environment Variable');
-    }
-    // 2. Try File
-    else if (cookieFile) {
+        cookieSource = 'Env';
+    } else if (cookieFile) {
         try {
             cookieContent = fs.readFileSync(cookieFile, 'utf8');
-            // console.log('Using cookies from file:', cookieFile);
+            cookieSource = 'File';
         } catch (e) {
             console.log('Error reading cookie file:', e.message);
         }
     }
 
+    let parsedCookies = undefined;
+
     if (cookieContent) {
         try {
-            // 1. Try JSON
-            const cookies = JSON.parse(cookieContent);
-            return ytdl.createAgent(cookies);
+            // Try JSON
+            parsedCookies = JSON.parse(cookieContent);
         } catch (e) {
-            // 2. Try Netscape
-            const netscapeCookies = parseNetscapeCookies(cookieContent);
-            if (netscapeCookies.length > 0) {
-                return ytdl.createAgent(netscapeCookies);
+            // Try Netscape
+            const netscape = parseNetscapeCookies(cookieContent);
+            if (netscape.length > 0) {
+                parsedCookies = netscape;
+            } else {
+                console.log('Failed to parse cookies (Not JSON or Netscape)');
             }
-            console.log('Failed to parse cookies (Not JSON or Netscape)');
         }
     }
 
-    // Default agent
-    return undefined;
+    if (parsedCookies) {
+        // ytdl.createAgent(cookies, options)
+        agentOptions[0] = parsedCookies;
+    }
+
+    // Create the agent
+    // If no proxy and no cookies, returns default
+    if (!agentOptions[0] && !agentOptions[1].dispatcher) {
+        return undefined;
+    }
+
+    try {
+        return ytdl.createAgent(agentOptions[0], agentOptions[1]);
+    } catch (err) {
+        console.log('Error creating YTDL agent:', err.message);
+        return undefined;
+    }
 }
 
 // --- Startup Cookie Check ---

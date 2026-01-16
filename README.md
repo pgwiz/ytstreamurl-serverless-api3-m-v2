@@ -45,6 +45,7 @@ Create a `.env` file or set in Vercel:
 | `SPOTIFY_CLIENT_SECRET` | Your Spotify Client Secret |
 | `PLAYGROUND` | Set to `true` to enable `/playground` |
 | `COOKIES` | Netscape format cookies (string) or JSON array (optional) |
+| `PROXY` | HTTP Proxy URL (e.g., `http://user:pass@host:port`) for Vercel IP Bypass |
 
 ---
 
