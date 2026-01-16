@@ -74,8 +74,63 @@ function createYtdlAgent() {
     }
 
     // Default agent (no cookies)
+    // Default agent (no cookies)
     return undefined;
 }
+
+// --- Startup Cookie Check ---
+function checkCookiesOnStartup() {
+    console.log('\n--- 🍪 Cookie Compatibility Check ---');
+    let cookieContent = null;
+    let source = 'None';
+
+    if (process.env.COOKIES) {
+        cookieContent = process.env.COOKIES;
+        source = 'Environment Variable (process.env.COOKIES)';
+    } else if (cookieFile) {
+        try {
+            cookieContent = fs.readFileSync(cookieFile, 'utf8');
+            source = `File (${path.basename(cookieFile)})`;
+        } catch (e) {
+            console.log(`❌ Error reading cookie file: ${e.message}`);
+            return;
+        }
+    }
+
+    if (!cookieContent) {
+        console.log('⚠️  No cookies found. Some YouTube videos may be restricted (Sign-in required).');
+        console.log('--- ----------------------------- ---\n');
+        return;
+    }
+
+    // Try JSON
+    try {
+        const cookies = JSON.parse(cookieContent);
+        if (Array.isArray(cookies)) {
+            console.log(`✅ Valid Cookies Loaded!`);
+            console.log(`   Source: ${source}`);
+            console.log(`   Format: JSON Array`);
+            console.log(`   Count:  ${cookies.length} cookies`);
+        } else {
+            console.log(`❌ Invalid JSON Cookies: Expected array, got ${typeof cookies}`);
+        }
+    } catch (e) {
+        // Try Netscape
+        if (typeof cookieContent === 'string' && (cookieContent.includes('\t') || cookieContent.startsWith('#'))) {
+            const lineCount = cookieContent.split('\n').filter(l => l.trim() && !l.startsWith('#')).length;
+            console.log(`✅ Valid Cookies Loaded!`);
+            console.log(`   Source: ${source}`);
+            console.log(`   Format: Netscape HTTP Cookie File`);
+            console.log(`   Count:  ~${lineCount} lines`);
+        } else {
+            console.log(`❌ Invalid Cookie Format: Neither JSON nor Netscape.`);
+        }
+    }
+    console.log('--- ----------------------------- ---\n');
+}
+
+// Run check immediately
+checkCookiesOnStartup();
 
 // Format seconds to duration string
 function formatDuration(seconds) {
