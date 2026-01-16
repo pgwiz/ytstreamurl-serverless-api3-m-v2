@@ -20,13 +20,42 @@ echo "============================================="
 
 # --- 1. Check Python ---
 echo "[1/5] Checking Python..."
-if command -v python3 &> /dev/null; then
-    PYTHON_BIN=$(command -v python3)
-    echo "   ✅ Found Python: $PYTHON_BIN"
-else
-    echo "   ❌ Python3 not found. Installing..."
-    apt-get update && apt-get install -y python3
-    PYTHON_BIN=$(command -v python3)
+
+# Check if Python 3.11+ is available
+PYTHON_BIN=""
+for py_cmd in python3.11 python3.12 python3.13 python3; do
+    if command -v $py_cmd &> /dev/null; then
+        PY_VERSION=$($py_cmd --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+        PY_MAJOR=$(echo $PY_VERSION | cut -d. -f1)
+        PY_MINOR=$(echo $PY_VERSION | cut -d. -f2)
+        
+        if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 10 ]; then
+            PYTHON_BIN=$(command -v $py_cmd)
+            echo "   ✅ Found Python $PY_VERSION: $PYTHON_BIN"
+            break
+        fi
+    fi
+done
+
+# Install Python 3.11 if needed
+if [ -z "$PYTHON_BIN" ]; then
+    echo "   ⚠️  Python 3.10+ not found. Installing Python 3.11..."
+    
+    # Add deadsnakes PPA for Ubuntu/Debian
+    apt-get update
+    apt-get install -y software-properties-common
+    add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || echo "   (PPA might already exist or not needed)"
+    apt-get update
+    apt-get install -y python3.11
+    
+    PYTHON_BIN=$(command -v python3.11)
+    
+    if [ -z "$PYTHON_BIN" ]; then
+        echo "   ❌ Failed to install Python 3.11"
+        exit 1
+    fi
+    
+    echo "   ✅ Installed Python 3.11: $PYTHON_BIN"
 fi
 
 # --- 1b. Install yt-dlp ---
