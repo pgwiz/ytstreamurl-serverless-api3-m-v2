@@ -41,6 +41,13 @@ done
 if [ -z "$PYTHON_BIN" ]; then
     echo "   ⚠️  Python 3.10+ not found. Installing Python 3.11..."
     
+    # Clean up any stale Ubuntu PPAs (if this is Debian)
+    if [ -f /etc/debian_version ] && [ ! -f /etc/lsb-release ]; then
+        echo "   🧹 Removing stale Ubuntu PPAs..."
+        rm -f /etc/apt/sources.list.d/*deadsnakes* 2>/dev/null
+        rm -f /etc/apt/sources.list.d/*ppa* 2>/dev/null
+    fi
+    
     # Detect OS
     if [ -f /etc/debian_version ]; then
         # Debian-based system
