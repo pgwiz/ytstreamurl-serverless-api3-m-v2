@@ -41,6 +41,21 @@ class ProxyServer:
                 return
 
             first_line = request.split(b'\n')[0]
+            
+            # --- Health Check Endpoint ---
+            if b'GET /health' in first_line or b'GET / HTTP' in first_line:
+                host_header = b''
+                for line in request.split(b'\n'):
+                    if line.lower().startswith(b'host:'):
+                        host_header = line.split(b':')[1].strip()
+                        break
+                # If the Host header points to our proxy port, respond directly
+                if b':6178' in host_header or host_header.startswith(b'localhost') or host_header.startswith(b'127.'):
+                    response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nProxy Server is Alive"
+                    client_socket.send(response)
+                    client_socket.close()
+                    return
+            
             url = first_line.split(b' ')[1]
             http_pos = url.find(b'://')
             
