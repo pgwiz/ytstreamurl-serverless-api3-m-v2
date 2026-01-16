@@ -168,6 +168,50 @@ class ProxyServer:
                 elif line.lower().startswith(b'host:'):
                     current_host = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
 
+            # --- Legacy API Endpoint: /api/stream/<video_id> ---
+            if b'GET /api/stream/' in first_line:
+                try:
+                    path = first_line.split(b' ')[1].decode('utf-8')
+                    video_id = path.split('/api/stream/')[1].split('?')[0]
+                    log(f"🎥 API Request: /api/stream/{video_id} from {real_ip}")
+                    
+                    result = extract_youtube_stream(video_id)
+                    
+                    if result:
+                        try:
+                            original_url = result.get('url')
+                            if original_url:
+                                encoded_url = quote(original_url)
+                                proxy_url = f"http://{current_host}/stream?url={encoded_url}"
+                                result['url'] = proxy_url
+                                result['original_url'] = original_url
+                                log(f"🔄 Rewrote URL: {proxy_url[:60]}...")
+                        except Exception as rw_err:
+                            log(f"⚠️ Rewrite Error: {rw_err}")
+
+                        response_body = json.dumps(result).encode('utf-8')
+                        response = (
+                            b"HTTP/1.1 200 OK\r\n"
+                            b"Content-Type: application/json\r\n"
+                            b"Access-Control-Allow-Origin: *\r\n"
+                            b"Connection: close\r\n"
+                            b"Content-Length: " + str(len(response_body)).encode() + b"\r\n\r\n"
+                            + response_body
+                        )
+                        log(f"✅ sent response for {video_id}")
+                    else:
+                         error_body = json.dumps({"error": "Failed to extract stream"}).encode('utf-8')
+                         response = (b"HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n" + error_body)
+                         log(f"❌ Failed extraction for {video_id}")
+
+                    client_socket.send(response)
+                    client_socket.close()
+                    return
+                except Exception as e:
+                    log(f"❌ API Error: {e}")
+                    client_socket.close()
+                    return
+
             # --- yt-dlp Extraction Endpoint: /ytdlp?id=... ---
             if b'GET /ytdlp' in first_line:
                 try:
