@@ -73,6 +73,31 @@ function parseNetscapeCookies(content) {
 // ---------------------------------------------------------
 import { ProxyAgent } from 'undici';
 
+// Test proxy connectivity
+async function testProxyConnection(proxyUrl) {
+    try {
+        const testUrl = `${proxyUrl}/health`;
+        console.log(`Testing proxy connection: ${testUrl}`);
+
+        const response = await fetch(testUrl, {
+            method: 'GET',
+            signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
+
+        if (response.ok) {
+            const body = await response.text();
+            console.log(`✅ Proxy connection SUCCESS! Response: ${body.substring(0, 50)}...`);
+            return true;
+        } else {
+            console.error(`⚠️ Proxy responded with status ${response.status}`);
+            return false;
+        }
+    } catch (error) {
+        console.error(`❌ Proxy connection FAILED: ${error.message}`);
+        return false;
+    }
+}
+
 function createYtdlAgent() {
     let agentOptions = []; // Arguments for ytdl.createAgent
 
@@ -81,6 +106,11 @@ function createYtdlAgent() {
     if (process.env.PROXY) {
         const traceId = Math.random().toString(36).substring(7);
         console.log(`Using Proxy: ${process.env.PROXY} [Trace: ${traceId}]`);
+
+        // Test proxy connectivity (async, but don't block - just log)
+        testProxyConnection(process.env.PROXY).catch(e =>
+            console.error('Proxy test error:', e.message)
+        );
 
         const proxyAgent = new ProxyAgent({
             uri: process.env.PROXY,
