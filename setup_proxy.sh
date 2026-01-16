@@ -195,29 +195,19 @@ rm -f /etc/nginx/sites-available/proxy-* 2>/dev/null
 # Restart to clear them from memory before re-adding
 systemctl reload nginx 2>/dev/null
 
-# Detect domain (excluding default and backup)
-PROXY_DOMAIN=""
-if [ -d /etc/nginx/sites-enabled ]; then
-    # find valid base domains only (no proxy- prefix)
-    PROXY_DOMAIN=$(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -v "default" | grep -v ".backup" | grep -v "^proxy-" | head -1)
-fi
-
-if [ -z "$PROXY_DOMAIN" ]; then
-    echo "   ⚠️  No base domain found. Skipping nginx proxy config."
-    echo "   ℹ️  Python proxy will take over port $PROXY_PORT directly? No, conflict risk."
-    echo "   ⚠️  Falling back: Please set PROXY_PORT=$INTERNAL_PORT in this script if no Nginx."
-else
-    echo "   🌐 Found base domain: $PROXY_DOMAIN"
+    # Always create nginx config for the proxy
+    # Use catch-all server_name to accept traffic on this port regardless of domain
+    PROXY_DOMAIN="catchall"
+    NGINX_PROXY_CONF="/etc/nginx/sites-available/proxy-default"
     
-    # Create nginx config for the proxy
-    NGINX_PROXY_CONF="/etc/nginx/sites-available/proxy-$PROXY_DOMAIN"
+    echo "   🌐 Configuring Nginx on port $PROXY_PORT (Catch-all)..."
     
     cat > "$NGINX_PROXY_CONF" <<EOF
-# Proxy server for $PROXY_DOMAIN on port $PROXY_PORT
+# Proxy server for ANY domain on port $PROXY_PORT
 server {
-    listen $PROXY_PORT;
-    listen [::]:$PROXY_PORT;
-    server_name $PROXY_DOMAIN;
+    listen $PROXY_PORT default_server;
+    listen [::]:$PROXY_PORT default_server;
+    server_name _;
     
     # Log all requests reaching nginx on this port
     access_log /var/log/nginx/proxy_access.log;
@@ -226,9 +216,15 @@ server {
     location / {
         proxy_pass http://127.0.0.1:$INTERNAL_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host:\$server_port;
+        proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Proxy-Trace-Id \$request_id;
+        
+        # Websocket support (if needed)
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
         proxy_connect_timeout 60s;
         proxy_read_timeout 60s;
     }
@@ -236,17 +232,16 @@ server {
 EOF
 
     # Enable the site
-    ln -sf "$NGINX_PROXY_CONF" "/etc/nginx/sites-enabled/proxy-$PROXY_DOMAIN"
+    ln -sf "$NGINX_PROXY_CONF" "/etc/nginx/sites-enabled/proxy-default"
     
     # Test and reload nginx
     if nginx -t 2>/dev/null; then
         systemctl reload nginx
-        echo "   ✅ Nginx configured: http://$PROXY_DOMAIN:$PROXY_PORT"
+        echo "   ✅ Nginx configured: http://<your-ip>:$PROXY_PORT"
     else
         echo "   ❌ Nginx config test failed. Check: nginx -t"
-        rm -f "/etc/nginx/sites-enabled/proxy-$PROXY_DOMAIN"
+        rm -f "/etc/nginx/sites-enabled/proxy-default"
     fi
-fi
 
 # --- 5. Verify ---
 echo "[5/5] Verifying..."
