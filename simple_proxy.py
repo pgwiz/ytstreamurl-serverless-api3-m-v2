@@ -108,7 +108,7 @@ class ProxyServer:
                         log_content = "(No logs yet)"
                     
                     html = f'''<!DOCTYPE html>
-<html><head><title>Proxy Server</title>
+<html><head><meta charset="UTF-8"><title>Proxy Server</title>
 <style>
 body {{ font-family: monospace; background: #1a1a2e; color: #0f0; padding: 20px; }}
 h1 {{ color: #4ade80; }}
