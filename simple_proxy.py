@@ -35,7 +35,7 @@ BUFFER_SIZE = 8192
 COOKIES_FILE = "/root/cookies.txt"  # Path to YouTube cookies
 
 def extract_youtube_stream(video_id):
-    """Extract YouTube stream URL using yt-dlp"""
+    """Extract YouTube stream URL using yt-dlp (Reference Implementation Logic)"""
     global ytdlp_logs
     log_entry = {"video_id": video_id, "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "stdout": "", "stderr": "", "success": False}
     
@@ -43,13 +43,16 @@ def extract_youtube_stream(video_id):
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         
         # Explicitly use python3.11 to run yt-dlp
-        # This bypasses the shebang in /usr/local/bin/yt-dlp which might point to python3.9
+        # Arguments adapted from old/index.py for proven reliability
         cmd = [
             "python3.11", 
             "/usr/local/bin/yt-dlp",
-            "--dump-json",
+            youtube_url,
+            "--no-cache-dir",
+            "--no-check-certificate",
+            "--dump-single-json",
             "--no-playlist",
-            youtube_url
+            "-f", "best[ext=mp4]/best" # Let yt-dlp choose best format
         ]
         
         # Add cookies if file exists
@@ -57,9 +60,9 @@ def extract_youtube_stream(video_id):
             cmd.extend(["--cookies", COOKIES_FILE])
         
         log(f"Running: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=45) # Increased timeout
         
-        log_entry["stdout"] = result.stdout[:1000]  # Store first 1000 chars
+        log_entry["stdout"] = result.stdout[:1000]
         log_entry["stderr"] = result.stderr[:1000]
         
         if result.returncode != 0:
@@ -71,33 +74,16 @@ def extract_youtube_stream(video_id):
         
         data = json.loads(result.stdout)
         
-        # Find best format
-        formats = data.get('formats', [])
-        best_format = None
+        # Direct extraction - trusting yt-dlp's selection via -f flag
+        stream_url = data.get('url')
         
-        # Try to find combined audio+video format
-        for fmt in formats:
-            if fmt.get('vcodec') != 'none' and fmt.get('acodec') != 'none':
-                best_format = fmt
-                break
-        
-        # Fallback to any format with video
-        if not best_format:
-            for fmt in formats:
-                if fmt.get('vcodec') != 'none':
-                    best_format = fmt
-                    break
-        
-        if not best_format:
-            best_format = formats[-1] if formats else None
-        
-        if not best_format:
-            log("No suitable format found")
+        if not stream_url:
+            log("No URL found in yt-dlp output")
             ytdlp_logs.append(log_entry)
             if len(ytdlp_logs) > 10:
                 ytdlp_logs.pop(0)
             return None
-        
+            
         log_entry["success"] = True
         ytdlp_logs.append(log_entry)
         if len(ytdlp_logs) > 10:
@@ -105,18 +91,18 @@ def extract_youtube_stream(video_id):
         
         return {
             "title": data.get('title', 'Unknown'),
-            "url": best_format.get('url'),
+            "url": stream_url,
             "thumbnail": data.get('thumbnail', f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg"),
             "duration": str(data.get('duration', 0)),
             "uploader": data.get('uploader', 'Unknown'),
             "id": video_id,
             "videoId": video_id,
-            "format_id": best_format.get('format_id'),
-            "ext": best_format.get('ext', 'mp4')
+            "format_id": data.get('format_id'),
+            "ext": data.get('ext', 'mp4')
         }
     except subprocess.TimeoutExpired:
         log("yt-dlp timeout")
-        log_entry["stderr"] = "Timeout (30s exceeded)"
+        log_entry["stderr"] = "Timeout (45s exceeded)"
         ytdlp_logs.append(log_entry)
         if len(ytdlp_logs) > 10:
             ytdlp_logs.pop(0)
