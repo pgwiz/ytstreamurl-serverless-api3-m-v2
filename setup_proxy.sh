@@ -49,9 +49,11 @@ if [ -z "$PYTHON_BIN" ]; then
     fi
     
     # Detect OS
-    if [ -f /etc/debian_version ]; then
+    DISTRO_ID=$(grep "^ID=" /etc/os-release | cut -d= -f2 | tr -d '"')
+    
+    if [ "$DISTRO_ID" = "debian" ]; then
         # Debian-based system
-        echo "   📦 Detected Debian-based system"
+        echo "   📦 Detected Debian system"
         
         # Try installing from Debian testing (simplest method)
         apt-get update
@@ -72,11 +74,22 @@ if [ -z "$PYTHON_BIN" ]; then
         rm -rf /tmp/Python-3.11.7*
         
         PYTHON_BIN="/usr/local/bin/python3.11"
-    else
+    elif [ "$DISTRO_ID" = "ubuntu" ]; then
         # Ubuntu-based system
+        echo "   📦 Detected Ubuntu system"
         apt-get update
         apt-get install -y software-properties-common
         add-apt-repository -y ppa:deadsnakes/ppa
+        apt-get update
+        apt-get install -y python3.11
+        PYTHON_BIN=$(command -v python3.11)
+    else
+        # Fallback or other Debian derivatives
+        echo "   ⚠️ Unknown distro ID: $DISTRO_ID. Assuming apt-compatible."
+        apt-get update
+        apt-get install -y software-properties-common
+        # Try adding PPA anyway as fallback, or instruct user
+        add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
         apt-get update
         apt-get install -y python3.11
         PYTHON_BIN=$(command -v python3.11)
