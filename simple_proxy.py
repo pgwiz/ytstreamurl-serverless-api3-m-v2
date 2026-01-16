@@ -46,8 +46,8 @@ class ProxyServer:
             
             while True:
                 client_socket, addr = self.server_socket.accept()
-                # log(f"📥 Connection from {addr[0]}") # Defer logging until headers are parsed
-                # log(f"📥 Connection from {addr[0]}") # Defer logging until headers are parsed
+                # Log EVERY connection immediately for debugging
+                log(f"🔌 RAW CONNECTION from {addr[0]}:{addr[1]}")
                 client_handler = threading.Thread(target=self.handle_client, args=(client_socket, addr))
                 client_handler.daemon = True
                 client_handler.start()
@@ -60,10 +60,12 @@ class ProxyServer:
         try:
             request = client_socket.recv(BUFFER_SIZE)
             if not request:
+                log("⚠️ Empty request received, closing")
                 client_socket.close()
                 return
 
             first_line = request.split(b'\n')[0]
+            log(f"📨 FIRST LINE: {first_line[:100]}")  # Log method and path
             
             # Extract Real IP from Nginx Headers
             real_ip = addr[0]
@@ -157,24 +159,26 @@ button:hover {{ background: #22c55e; }}
                 webserver = temp[:port_pos]
 
             if b'CONNECT' in first_line:
-                log(f"🔒 HTTPS CONNECT → {webserver.decode()}:{port}")
+                log(f"🔒 HTTPS CONNECT → {webserver.decode()}:{port} [IP: {real_ip}]")
                 self.handle_https_tunnel(client_socket, webserver, port)
             else:
-                log(f"🌐 HTTP → {webserver.decode()}:{port}")
+                log(f"🌐 HTTP {first_line.split(b' ')[0].decode()} → {webserver.decode()}:{port} [IP: {real_ip}]")
                 self.handle_http_request(client_socket, request, webserver, port)
 
         except Exception as e:
-            log(f"❌ Error: {e}")
+            log(f"❌ Error processing request from {addr[0]}: {e}")
             client_socket.close()
 
     def handle_https_tunnel(self, client_socket, host, port):
         try:
             remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             remote_socket.connect((host, port))
+            log(f"✅ CONNECT 200 → {host.decode()}:{port}")
             client_socket.send(b'HTTP/1.1 200 Connection Established\r\n\r\n')
             
             self.forward_data(client_socket, remote_socket)
         except Exception as e:
+            log(f"❌ CONNECT FAILED → {host.decode()}:{port} - {e}")
             # print(f"[!] HTTPS Tunnel Error: {e}")
             client_socket.close()
 

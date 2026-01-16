@@ -133,6 +133,10 @@ server {
     listen $PROXY_PORT;
     listen [::]:$PROXY_PORT;
     server_name $PROXY_DOMAIN;
+    
+    # Log all requests reaching nginx on this port
+    access_log /var/log/nginx/proxy_access.log;
+    error_log /var/log/nginx/proxy_error.log;
 
     location / {
         proxy_pass http://127.0.0.1:$INTERNAL_PORT;
