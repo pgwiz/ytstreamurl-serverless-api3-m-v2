@@ -326,7 +326,8 @@ class ProxyServer:
                     remote_socket.send(b'\r\n'.join(new_request_lines))
                     
                     # Bridge connection
-                    self.forward_data(client_socket, remote_socket)
+                    # Bridge connection with CORS injection
+                    self.forward_response_with_cors(client_socket, remote_socket)
                     return
 
                 except Exception as e:
@@ -451,6 +452,63 @@ button:hover {{ background: #22c55e; }}
             if 'remote_socket' in locals():
                 remote_socket.close()
 
+    def forward_response_with_cors(self, client, remote):
+        """
+        Reads headers from remote, injects CORS, sends to client, then pipes body.
+        """
+        try:
+            # Read header block
+            header_data = b""
+            while True:
+                chunk = remote.recv(1)
+                if not chunk:
+                    break
+                header_data += chunk
+                if b"\r\n\r\n" in header_data:
+                    break
+            
+            if not header_data:
+                return
+
+            # Split headers and body
+            headers_part, body_start = header_data.split(b"\r\n\r\n", 1)
+            lines = headers_part.split(b"\r\n")
+            
+            # Construct new headers
+            new_lines = []
+            status_line = lines[0]
+            new_lines.append(status_line)
+            
+            # Filter and add headers
+            has_cors = False
+            for line in lines[1:]:
+                if line.lower().startswith(b"access-control-allow-origin"):
+                    has_cors = True
+                    new_lines.append(b"Access-Control-Allow-Origin: *") # Force wildcard
+                else:
+                    new_lines.append(line)
+            
+            if not has_cors:
+                new_lines.append(b"Access-Control-Allow-Origin: *")
+            
+            # Reassemble headers
+            new_header_block = b"\r\n".join(new_lines) + b"\r\n\r\n"
+            
+            # Send to client
+            client.sendall(new_header_block)
+            if body_start:
+                client.sendall(body_start)
+            
+            # Pipe the rest of the body
+            self.forward_data(client, remote)
+            
+        except Exception as e:
+            log(f"Header injection error: {e}")
+            pass
+        finally:
+            client.close()
+            remote.close()
+
     def forward_data(self, client, remote):
         try:
             sockets = [client, remote]
@@ -467,9 +525,6 @@ button:hover {{ background: #22c55e; }}
                     other.send(data)
         except:
             pass
-        finally:
-            client.close()
-            remote.close()
 
 if __name__ == '__main__':
     proxy = ProxyServer(BIND_HOST, BIND_PORT)
