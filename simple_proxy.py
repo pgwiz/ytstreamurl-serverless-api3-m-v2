@@ -47,10 +47,11 @@ class ProxyServer:
                 host_header = b''
                 for line in request.split(b'\n'):
                     if line.lower().startswith(b'host:'):
-                        host_header = line.split(b':')[1].strip()
+                        # Get everything after "Host: " (handle Host: localhost:6178)
+                        host_header = line.split(b':', 1)[1].strip().lower()
                         break
-                # If the Host header points to our proxy port, respond directly
-                if b':6178' in host_header or host_header.startswith(b'localhost') or host_header.startswith(b'127.'):
+                # If the Host header points to our proxy (localhost, 127.x, or contains :6178)
+                if b'localhost' in host_header or b'127.' in host_header or b':6178' in host_header:
                     response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nProxy Server is Alive"
                     client_socket.send(response)
                     client_socket.close()

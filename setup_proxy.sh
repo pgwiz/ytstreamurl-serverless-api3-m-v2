@@ -178,6 +178,7 @@ echo ""
 # --- Detect Nginx Domains ---
 echo "  📋 Detected Nginx Domains:"
 if command -v nginx &> /dev/null; then
+    # Get domains from server_name directives
     DOMAINS=$(grep -rh "server_name" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | \
               grep -v "#" | \
               sed 's/server_name//g' | \
@@ -185,7 +186,18 @@ if command -v nginx &> /dev/null; then
               tr -s ' ' '\n' | \
               sort -u | \
               grep -v "^$" | \
+              grep -v "_" | \
               head -20)
+    
+    # Also add site-enabled filenames (often the domain name)
+    if [ -d /etc/nginx/sites-enabled ]; then
+        SITE_FILES=$(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -v "default" | grep -v ".backup")
+        DOMAINS="$DOMAINS $SITE_FILES"
+    fi
+    
+    # Remove duplicates and display
+    DOMAINS=$(echo "$DOMAINS" | tr ' ' '\n' | sort -u | grep -v "^$")
+    
     if [ -n "$DOMAINS" ]; then
         for domain in $DOMAINS; do
             echo "     - $domain"
