@@ -33,10 +33,36 @@ echo "[2/5] Setting up installation directory..."
 mkdir -p "$INSTALL_DIR"
 echo "   📂 $INSTALL_DIR"
 
-echo "   📥 Downloading simple_proxy.py from GitHub..."
-curl -fsSL "$GITHUB_RAW_URL" -o "$INSTALL_DIR/simple_proxy.py"
-chmod +x "$INSTALL_DIR/simple_proxy.py"
-echo "   ✅ Downloaded."
+ALTERED_FILES=""
+TARGET_FILE="$INSTALL_DIR/simple_proxy.py"
+
+# Check if file exists and compare
+if [ -f "$TARGET_FILE" ]; then
+    OLD_HASH=$(md5sum "$TARGET_FILE" 2>/dev/null | awk '{print $1}')
+    echo "   ℹ️  Existing file found. Checking for updates..."
+else
+    OLD_HASH=""
+    echo "   📥 First installation..."
+fi
+
+# Force download (always replace)
+curl -fsSL "$GITHUB_RAW_URL" -o "$TARGET_FILE.new"
+
+NEW_HASH=$(md5sum "$TARGET_FILE.new" 2>/dev/null | awk '{print $1}')
+
+if [ "$OLD_HASH" != "$NEW_HASH" ]; then
+    mv "$TARGET_FILE.new" "$TARGET_FILE"
+    chmod +x "$TARGET_FILE"
+    if [ -n "$OLD_HASH" ]; then
+        echo "   🔄 UPDATED: simple_proxy.py"
+        ALTERED_FILES="$ALTERED_FILES simple_proxy.py"
+    else
+        echo "   ✅ Downloaded: simple_proxy.py"
+    fi
+else
+    rm -f "$TARGET_FILE.new"
+    echo "   ✅ No changes: simple_proxy.py (already up-to-date)"
+fi
 
 # --- 3. Create Systemd Service ---
 echo "[3/5] Creating systemd service..."
@@ -171,6 +197,15 @@ else
     echo "     (Nginx not installed)"
 fi
 echo ""
+
+# --- Display Altered Files ---
+if [ -n "$ALTERED_FILES" ]; then
+    echo "  🔄 Altered Files:"
+    for f in $ALTERED_FILES; do
+        echo "     - $f"
+    done
+    echo ""
+fi
 
 echo "  Commands:"
 echo "    Status:  systemctl status ${SERVICE_NAME}"
