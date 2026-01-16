@@ -50,8 +50,12 @@ class ProxyServer:
                         # Get everything after "Host: " (handle Host: localhost:6178)
                         host_header = line.split(b':', 1)[1].strip().lower()
                         break
-                # If the Host header points to our proxy (localhost, 127.x, or contains :6178)
-                if b'localhost' in host_header or b'127.' in host_header or b':6178' in host_header:
+                # If the Host header points to our proxy (localhost, 127.x, :6178, or known domains)
+                # Add your proxy domain here for direct response
+                is_local = b'localhost' in host_header or b'127.' in host_header or b':6178' in host_header
+                is_proxy_domain = b'servx.pgwiz.us.kg' in host_header or b'pgwiz' in host_header
+                
+                if is_local or is_proxy_domain:
                     response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nProxy Server is Alive"
                     client_socket.send(response)
                     client_socket.close()

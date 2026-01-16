@@ -92,8 +92,8 @@ systemctl enable ${SERVICE_NAME}
 systemctl restart ${SERVICE_NAME}
 echo "   ✅ Service '${SERVICE_NAME}' created and (re)started."
 
-# --- 4. Configure Nginx (Stream Proxy for TCP) ---
-echo "[4/5] Configuring Nginx for port $PROXY_PORT..."
+# --- 4. Configure Nginx ---
+echo "[4/5] Configuring Nginx..."
 
 # Check if Nginx is installed
 if ! command -v nginx &> /dev/null; then
@@ -101,54 +101,52 @@ if ! command -v nginx &> /dev/null; then
     apt-get update && apt-get install -y nginx
 fi
 
-# Add stream config for TCP proxy (if not already present)
-# Note: Some Nginx packages don't have stream module by default.
-# This adds a simple stream block if the main nginx.conf supports it.
+# Detect first available domain from sites-enabled (excluding default)
+PROXY_DOMAIN=""
+if [ -d /etc/nginx/sites-enabled ]; then
+    PROXY_DOMAIN=$(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -v "default" | grep -v ".backup" | head -1)
+fi
 
-NGINX_STREAM_CONF="/etc/nginx/conf.d/proxy_stream.conf"
+if [ -z "$PROXY_DOMAIN" ]; then
+    echo "   ⚠️  No domain found. Skipping nginx proxy config."
+    echo "   ℹ️  Python proxy is directly accessible on port $PROXY_PORT"
+else
+    echo "   🌐 Found domain: $PROXY_DOMAIN"
+    
+    # Create nginx config for the proxy
+    NGINX_PROXY_CONF="/etc/nginx/sites-available/proxy-$PROXY_DOMAIN"
+    
+    cat > "$NGINX_PROXY_CONF" <<EOF
+# Proxy server for $PROXY_DOMAIN on port $PROXY_PORT
+server {
+    listen $PROXY_PORT;
+    listen [::]:$PROXY_PORT;
+    server_name $PROXY_DOMAIN;
 
-# We'll use a server block that listens on 6178 and proxies to localhost:6178
-# This allows Cloudflare Tunnel to hit Nginx on 6178 if needed.
-# If Cloudflare is proxying directly to the Python port, this step is optional.
-
-cat > "$NGINX_STREAM_CONF" <<EOF
-# Stream proxy for simple_proxy.py
-# This forwards TCP connections on $PROXY_PORT to the Python proxy.
-# If Cloudflare Tunnel points directly to port $PROXY_PORT, this is optional but helps with logging.
-
-# Note: This requires the 'stream' module in Nginx.
-# If you see errors, you may need to install nginx-extras or configure stream in nginx.conf.
-
-# stream {
-#     server {
-#         listen $PROXY_PORT;
-#         listen [::]:$PROXY_PORT;
-#         proxy_pass 127.0.0.1:$PROXY_PORT;
-#     }
-# }
-
-# -----------------------------------------------------------------
-# Alternative: HTTP Reverse Proxy (if Cloudflare expects HTTP on 6178)
-# -----------------------------------------------------------------
-# server {
-#     listen $PROXY_PORT;
-#     listen [::]:$PROXY_PORT;
-#     
-#     location / {
-#         proxy_pass http://127.0.0.1:$PROXY_PORT;
-#         proxy_http_version 1.1;
-#         proxy_set_header Host \$host;
-#         proxy_set_header X-Real-IP \$remote_addr;
-#     }
-# }
+    location / {
+        proxy_pass http://127.0.0.1:6178;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host:\$server_port;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
 EOF
 
-echo "   ⚠️  Nginx stream config written to $NGINX_STREAM_CONF (commented out by default)."
-echo "   ℹ️  Since your Python proxy already listens on $PROXY_PORT, Nginx is optional."
-echo "   ℹ️  Uncomment the config if you need Nginx as a frontend."
-
-# Test Nginx config (optional, may fail if stream module missing)
-# nginx -t && systemctl reload nginx
+    # Enable the site
+    ln -sf "$NGINX_PROXY_CONF" "/etc/nginx/sites-enabled/proxy-$PROXY_DOMAIN"
+    
+    # Test and reload nginx
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx
+        echo "   ✅ Nginx configured: http://$PROXY_DOMAIN:$PROXY_PORT"
+    else
+        echo "   ❌ Nginx config test failed. Check: nginx -t"
+        rm -f "/etc/nginx/sites-enabled/proxy-$PROXY_DOMAIN"
+    fi
+fi
 
 # --- 5. Verify ---
 echo "[5/5] Verifying..."
