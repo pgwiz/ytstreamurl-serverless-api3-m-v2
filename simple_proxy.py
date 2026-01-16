@@ -42,8 +42,11 @@ def extract_youtube_stream(video_id):
     try:
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         
+        # Explicitly use python3.11 to run yt-dlp
+        # This bypasses the shebang in /usr/local/bin/yt-dlp which might point to python3.9
         cmd = [
-            "yt-dlp",
+            "python3.11", 
+            "/usr/local/bin/yt-dlp",
             "--dump-json",
             "--no-playlist",
             youtube_url
