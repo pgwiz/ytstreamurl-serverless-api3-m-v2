@@ -417,6 +417,7 @@ async function extractVideoInfo(videoUrl) {
 
                 const data = await response.json();
                 console.log(`✅ Proxy extraction successful for ${videoId}`);
+                console.log(`🔍 Proxy Response JSON:`, JSON.stringify(data, null, 2));
 
                 // Return in expected format
                 return {

@@ -52,7 +52,7 @@ def extract_youtube_stream(video_id):
             "--no-check-certificate",
             "--dump-single-json",
             "--no-playlist",
-            "-f", "best[ext=mp4]/best" # Let yt-dlp choose best format
+            "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]" # progressive only (no HLS)
         ]
         
         # Add cookies if file exists
@@ -74,7 +74,7 @@ def extract_youtube_stream(video_id):
         
         data = json.loads(result.stdout)
         
-        # Direct extraction - trusting yt-dlp's selection via -f flag
+        # Direct extraction
         stream_url = data.get('url')
         
         if not stream_url:
@@ -258,7 +258,7 @@ class ProxyServer:
                         + response_body
                     )
                     client_socket.send(response)
-                    log(f"✅ sent response for {video_id}")
+                    log(f"✅ sent response for {video_id}: {json.dumps(result)}")
                     client_socket.close()
                     return
 
