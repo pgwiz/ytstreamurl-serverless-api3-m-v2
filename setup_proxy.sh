@@ -41,16 +41,41 @@ done
 if [ -z "$PYTHON_BIN" ]; then
     echo "   ⚠️  Python 3.10+ not found. Installing Python 3.11..."
     
-    # Add deadsnakes PPA for Ubuntu/Debian
-    apt-get update
-    apt-get install -y software-properties-common
-    add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || echo "   (PPA might already exist or not needed)"
-    apt-get update
-    apt-get install -y python3.11
+    # Detect OS
+    if [ -f /etc/debian_version ]; then
+        # Debian-based system
+        echo "   📦 Detected Debian-based system"
+        
+        # Try installing from Debian testing (simplest method)
+        apt-get update
+        apt-get install -y wget build-essential libssl-dev zlib1g-dev \
+            libncurses5-dev libncursesw5-dev libreadline-dev libsqlite3-dev \
+            libgdbm-dev libdb5.3-dev libbz2-dev libexpat1-dev liblzma-dev \
+            libffi-dev uuid-dev
+        
+        # Download and compile Python 3.11
+        cd /tmp
+        wget https://www.python.org/ftp/python/3.11.7/Python-3.11.7.tgz
+        tar -xzf Python-3.11.7.tgz
+        cd Python-3.11.7
+        ./configure --enable-optimizations --prefix=/usr/local
+        make -j$(nproc)
+        make altinstall  # altinstall to not override system python3
+        cd /
+        rm -rf /tmp/Python-3.11.7*
+        
+        PYTHON_BIN="/usr/local/bin/python3.11"
+    else
+        # Ubuntu-based system
+        apt-get update
+        apt-get install -y software-properties-common
+        add-apt-repository -y ppa:deadsnakes/ppa
+        apt-get update
+        apt-get install -y python3.11
+        PYTHON_BIN=$(command -v python3.11)
+    fi
     
-    PYTHON_BIN=$(command -v python3.11)
-    
-    if [ -z "$PYTHON_BIN" ]; then
+    if [ -z "$PYTHON_BIN" ] || [ ! -f "$PYTHON_BIN" ]; then
         echo "   ❌ Failed to install Python 3.11"
         exit 1
     fi
