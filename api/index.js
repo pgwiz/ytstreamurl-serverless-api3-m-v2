@@ -40,9 +40,30 @@ function loadCookies() {
         }
     }
     return null;
+    return null;
 }
 
 const cookieFile = loadCookies();
+
+// Helper to parse Netscape format
+function parseNetscapeCookies(content) {
+    const cookies = [];
+    const lines = content.split('\n');
+    for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 7 && !line.startsWith('#')) {
+            cookies.push({
+                domain: parts[0],
+                path: parts[2],
+                secure: parts[3] === 'TRUE',
+                expirationDate: parseInt(parts[4]),
+                name: parts[5],
+                value: parts[6].trim()
+            });
+        }
+    }
+    return cookies;
+}
 
 function createYtdlAgent() {
     let cookieContent = null;
@@ -50,13 +71,13 @@ function createYtdlAgent() {
     // 1. Try Environment Variable
     if (process.env.COOKIES) {
         cookieContent = process.env.COOKIES;
-        console.log('Using cookies from Environment Variable');
+        // console.log('Using cookies from Environment Variable');
     }
     // 2. Try File
     else if (cookieFile) {
         try {
             cookieContent = fs.readFileSync(cookieFile, 'utf8');
-            console.log('Using cookies from file:', cookieFile);
+            // console.log('Using cookies from file:', cookieFile);
         } catch (e) {
             console.log('Error reading cookie file:', e.message);
         }
@@ -64,17 +85,20 @@ function createYtdlAgent() {
 
     if (cookieContent) {
         try {
-            // Try to parse as JSON (if user provided array)
+            // 1. Try JSON
             const cookies = JSON.parse(cookieContent);
-            return ytdl.createAgent(undefined, { cookies });
+            return ytdl.createAgent(cookies);
         } catch (e) {
-            // If JSON parse fails, assume Netscape string
-            return ytdl.createAgent(undefined, { cookies: cookieContent });
+            // 2. Try Netscape
+            const netscapeCookies = parseNetscapeCookies(cookieContent);
+            if (netscapeCookies.length > 0) {
+                return ytdl.createAgent(netscapeCookies);
+            }
+            console.log('Failed to parse cookies (Not JSON or Netscape)');
         }
     }
 
-    // Default agent (no cookies)
-    // Default agent (no cookies)
+    // Default agent
     return undefined;
 }
 
