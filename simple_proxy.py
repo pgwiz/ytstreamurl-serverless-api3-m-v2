@@ -3,7 +3,10 @@ import select
 import threading
 import sys
 import os
+import json
+import subprocess
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs
 
 # Log directory
 LOG_DIR = "/root/proxyLogs"
@@ -26,6 +29,73 @@ def log(msg):
 BIND_HOST = '::'  # Bind to all interfaces (IPv4 + IPv6 dual-stack)
 BIND_PORT = 6178
 BUFFER_SIZE = 8192
+COOKIES_FILE = "/root/cookies.txt"  # Path to YouTube cookies
+
+def extract_youtube_stream(video_id):
+    """Extract YouTube stream URL using yt-dlp"""
+    try:
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        cmd = [
+            "yt-dlp",
+            "--dump-json",
+            "--no-playlist",
+            youtube_url
+        ]
+        
+        # Add cookies if file exists
+        if os.path.exists(COOKIES_FILE):
+            cmd.extend(["--cookies", COOKIES_FILE])
+        
+        log(f"Running: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            log(f"yt-dlp error: {result.stderr}")
+            return None
+        
+        data = json.loads(result.stdout)
+        
+        # Find best format
+        formats = data.get('formats', [])
+        best_format = None
+        
+        # Try to find combined audio+video format
+        for fmt in formats:
+            if fmt.get('vcodec') != 'none' and fmt.get('acodec') != 'none':
+                best_format = fmt
+                break
+        
+        # Fallback to any format with video
+        if not best_format:
+            for fmt in formats:
+                if fmt.get('vcodec') != 'none':
+                    best_format = fmt
+                    break
+        
+        if not best_format:
+            best_format = formats[-1] if formats else None
+        
+        if not best_format:
+            return None
+        
+        return {
+            "title": data.get('title', 'Unknown'),
+            "url": best_format.get('url'),
+            "thumbnail": data.get('thumbnail', f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg"),
+            "duration": str(data.get('duration', 0)),
+            "uploader": data.get('uploader', 'Unknown'),
+            "id": video_id,
+            "videoId": video_id,
+            "format_id": best_format.get('format_id'),
+            "ext": best_format.get('ext', 'mp4')
+        }
+    except subprocess.TimeoutExpired:
+        log("yt-dlp timeout")
+        return None
+    except Exception as e:
+        log(f"Extraction error: {e}")
+        return None
 
 class ProxyServer:
     def __init__(self, host, port):
@@ -77,6 +147,54 @@ class ProxyServer:
                     real_ip = line.split(b':', 1)[1].strip().split(b',')[0].strip().decode('utf-8', errors='ignore')
                 elif line.lower().startswith(b'x-proxy-trace-id:'):
                     trace_id = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
+
+            # Check for API endpoint: /api/stream/<video_id>
+            if b'GET /api/stream/' in first_line:
+                try:
+                    path = first_line.split(b' ')[1].decode('utf-8')
+                    video_id = path.split('/api/stream/')[1].split('?')[0]
+                    log(f"🎥 API Request: /api/stream/{video_id} from {real_ip}")
+                    
+                    result = extract_youtube_stream(video_id)
+                    
+                    if result:
+                        response_body = json.dumps(result).encode('utf-8')
+                        response = (
+                            b"HTTP/1.1 200 OK\r\n"
+                            b"Content-Type: application/json\r\n"
+                            b"Access-Control-Allow-Origin: *\r\n"
+                            b"Connection: close\r\n"
+                            b"Content-Length: " + str(len(response_body)).encode() + b"\r\n\r\n"
+                            + response_body
+                        )
+                        log(f"✅ Stream extracted for {video_id}")
+                    else:
+                        error_body = json.dumps({"error": "Failed to extract stream"}).encode('utf-8')
+                        response = (
+                            b"HTTP/1.1 500 Internal Server Error\r\n"
+                            b"Content-Type: application/json\r\n"
+                            b"Connection: close\r\n"
+                            b"Content-Length: " + str(len(error_body)).encode() + b"\r\n\r\n"
+                            + error_body
+                        )
+                        log(f"❌ Failed to extract stream for {video_id}")
+                    
+                    client_socket.send(response)
+                    client_socket.close()
+                    return
+                except Exception as e:
+                    log(f"❌ API Error: {e}")
+                    error_body = json.dumps({"error": str(e)}).encode('utf-8')
+                    response = (
+                        b"HTTP/1.1 500 Internal Server Error\r\n"
+                        b"Content-Type: application/json\r\n"
+                        b"Connection: close\r\n"
+                        b"Content-Length: " + str(len(error_body)).encode() + b"\r\n\r\n"
+                        + error_body
+                    )
+                    client_socket.send(response)
+                    client_socket.close()
+                    return
 
             # Log connection now with real IP and Trace ID
             if not (b'GET /health' in first_line or b'GET / HTTP' in first_line):

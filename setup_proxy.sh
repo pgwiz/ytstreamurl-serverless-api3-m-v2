@@ -29,6 +29,17 @@ else
     PYTHON_BIN=$(command -v python3)
 fi
 
+# --- 1b. Install yt-dlp ---
+echo "   📦 Checking yt-dlp..."
+if command -v yt-dlp &> /dev/null; then
+    echo "   ✅ yt-dlp already installed"
+else
+    echo "   📥 Installing yt-dlp..."
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+    chmod a+rx /usr/local/bin/yt-dlp
+    echo "   ✅ yt-dlp installed"
+fi
+
 # --- 2. Create Install Directory & Download Script ---
 echo "[2/5] Setting up installation directory..."
 mkdir -p "$INSTALL_DIR"
