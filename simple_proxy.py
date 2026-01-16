@@ -78,7 +78,37 @@ class ProxyServer:
                 is_proxy_domain = b'servx.pgwiz.us.kg' in host_header or b'pgwiz' in host_header
                 
                 if is_local or is_proxy_domain:
-                    response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nProxy Server is Alive"
+                    # Read recent logs
+                    log_content = ""
+                    log_file = os.path.join(LOG_DIR, f"proxy_{datetime.now().strftime('%Y-%m-%d')}.log")
+                    try:
+                        with open(log_file, 'r') as f:
+                            lines = f.readlines()
+                            log_content = ''.join(lines[-50:])  # Last 50 lines
+                    except:
+                        log_content = "(No logs yet)"
+                    
+                    html = f'''<!DOCTYPE html>
+<html><head><title>Proxy Server</title>
+<style>
+body {{ font-family: monospace; background: #1a1a2e; color: #0f0; padding: 20px; }}
+h1 {{ color: #4ade80; }}
+.status {{ color: #4ade80; font-size: 24px; margin: 20px 0; }}
+pre {{ background: #0d0d1a; padding: 15px; border-radius: 8px; overflow-x: auto; max-height: 400px; overflow-y: auto; }}
+button {{ background: #4ade80; color: #000; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }}
+button:hover {{ background: #22c55e; }}
+</style></head><body>
+<h1>🌐 Proxy Server</h1>
+<div class="status">✅ Proxy Server is Alive</div>
+<p><strong>Port:</strong> 2082 | <strong>Logs:</strong> /root/proxyLogs/</p>
+<button onclick="navigator.clipboard.writeText('http://servx.pgwiz.us.kg:2082')">📋 Copy Proxy URL</button>
+<button onclick="location.reload()">🔄 Refresh</button>
+<h3>📜 Recent Logs (Last 50)</h3>
+<pre id="logs">{log_content}</pre>
+<script>setTimeout(()=>location.reload(), 10000);</script>
+</body></html>'''
+                    
+                    response = f"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n{html}".encode()
                     client_socket.send(response)
                     client_socket.close()
                     return
