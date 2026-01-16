@@ -2,6 +2,10 @@ import socket
 import select
 import threading
 import sys
+from datetime import datetime
+
+def log(msg):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
 # Configuration
 BIND_HOST = '::'  # Bind to all interfaces (IPv4 + IPv6 dual-stack)
@@ -27,8 +31,8 @@ class ProxyServer:
             
             while True:
                 client_socket, addr = self.server_socket.accept()
-                # print(f"[*] Accepted connection from {addr[0]}:{addr[1]}")
-                client_handler = threading.Thread(target=self.handle_client, args=(client_socket,))
+                log(f"📥 Connection from {addr[0]}")
+                client_handler = threading.Thread(target=self.handle_client, args=(client_socket, addr))
                 client_handler.daemon = True
                 client_handler.start()
         except Exception as e:
@@ -36,7 +40,7 @@ class ProxyServer:
         finally:
             self.server_socket.close()
 
-    def handle_client(self, client_socket):
+    def handle_client(self, client_socket, addr):
         try:
             request = client_socket.recv(BUFFER_SIZE)
             if not request:
@@ -89,12 +93,14 @@ class ProxyServer:
                 webserver = temp[:port_pos]
 
             if b'CONNECT' in first_line:
+                log(f"🔒 HTTPS CONNECT → {webserver.decode()}:{port}")
                 self.handle_https_tunnel(client_socket, webserver, port)
             else:
+                log(f"🌐 HTTP → {webserver.decode()}:{port}")
                 self.handle_http_request(client_socket, request, webserver, port)
 
         except Exception as e:
-            # print(f"[!] Processing error: {e}")
+            log(f"❌ Error: {e}")
             client_socket.close()
 
     def handle_https_tunnel(self, client_socket, host, port):
