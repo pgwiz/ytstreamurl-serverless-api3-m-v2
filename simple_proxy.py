@@ -182,7 +182,8 @@ class ProxyServer:
                             original_url = result.get('url')
                             if original_url:
                                 encoded_url = quote(original_url)
-                                proxy_url = f"http://{current_host}/stream?url={encoded_url}"
+                                # Force HTTPS to prevent Mixed Content errors on Vercel
+                                proxy_url = f"https://{current_host}/stream?url={encoded_url}"
                                 result['url'] = proxy_url
                                 result['original_url'] = original_url
                                 log(f"🔄 Rewrote URL: {proxy_url[:60]}...")
@@ -237,8 +238,8 @@ class ProxyServer:
                         original_url = result.get('url')
                         if original_url:
                             encoded_url = quote(original_url)
-                            # Force HTTP (since proxy is HTTP)
-                            proxy_url = f"http://{current_host}/stream?url={encoded_url}"
+                            # Force HTTPS (since proxy is HTTP)
+                            proxy_url = f"https://{current_host}/stream?url={encoded_url}"
                             result['url'] = proxy_url
                             result['original_url'] = original_url
                             
