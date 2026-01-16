@@ -394,9 +394,49 @@ async function getSpotifyAccessToken() {
     return spotifyAccessToken;
 }
 
-// --- Extract video info using ytdl-core ---
+// --- Extract video info using ytdl-core OR proxy API ---
 async function extractVideoInfo(videoUrl) {
     try {
+        // Extract video ID from URL
+        const videoId = extractVideoId(videoUrl);
+
+        // If proxy is configured, use proxy API instead of ytdl-core
+        if (process.env.PROXY) {
+            console.log(`Using Proxy API for video extraction: ${videoId}`);
+            const proxyApiUrl = `${process.env.PROXY}/api/stream/${videoId}`;
+
+            try {
+                const response = await fetch(proxyApiUrl, {
+                    method: 'GET',
+                    signal: AbortSignal.timeout(35000) // 35 second timeout
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Proxy API returned ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log(`✅ Proxy extraction successful for ${videoId}`);
+
+                // Return in expected format
+                return {
+                    title: data.title || 'Untitled',
+                    url: data.url,
+                    thumbnail: data.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                    duration: formatDuration(parseInt(data.duration) || 0),
+                    uploader: data.uploader || 'Unknown',
+                    id: videoId,
+                    videoId: videoId,
+                    name: data.title || 'Untitled',
+                    artist: data.uploader || 'Unknown'
+                };
+            } catch (proxyError) {
+                console.error(`Proxy API failed: ${proxyError.message}, falling back to ytdl-core`);
+                // Fall through to ytdl-core
+            }
+        }
+
+        // Fallback to ytdl-core (for local dev or if proxy fails)
         const agent = createYtdlAgent();
         console.log(`Calling ytdl.getInfo with agent:`, agent ? 'CONFIGURED' : 'DEFAULT');
         const info = await ytdl.getInfo(videoUrl, { agent });
@@ -421,6 +461,12 @@ async function extractVideoInfo(videoUrl) {
         console.error('Error extracting video info:', error.message);
         throw error;
     }
+}
+
+// Helper to extract video ID from URL
+function extractVideoId(url) {
+    const match = url.match(/(?:v=|\/)([\w-]{11})/);
+    return match ? match[1] : url;
 }
 
 // --- Extract YouTube Playlist using ytpl ---
