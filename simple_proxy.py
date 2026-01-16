@@ -12,6 +12,9 @@ from urllib.parse import urlparse, parse_qs
 LOG_DIR = "/root/proxyLogs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
+# Store recent yt-dlp execution logs (last 10)
+ytdlp_logs = []
+
 def log(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_line = f"[{timestamp}] {msg}"
@@ -33,6 +36,9 @@ COOKIES_FILE = "/root/cookies.txt"  # Path to YouTube cookies
 
 def extract_youtube_stream(video_id):
     """Extract YouTube stream URL using yt-dlp"""
+    global ytdlp_logs
+    log_entry = {"video_id": video_id, "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "stdout": "", "stderr": "", "success": False}
+    
     try:
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         
@@ -50,8 +56,14 @@ def extract_youtube_stream(video_id):
         log(f"Running: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         
+        log_entry["stdout"] = result.stdout[:1000]  # Store first 1000 chars
+        log_entry["stderr"] = result.stderr[:1000]
+        
         if result.returncode != 0:
-            log(f"yt-dlp error: {result.stderr}")
+            log(f"yt-dlp error (code {result.returncode}): {result.stderr[:200]}")
+            ytdlp_logs.append(log_entry)
+            if len(ytdlp_logs) > 10:
+                ytdlp_logs.pop(0)
             return None
         
         data = json.loads(result.stdout)
@@ -77,7 +89,16 @@ def extract_youtube_stream(video_id):
             best_format = formats[-1] if formats else None
         
         if not best_format:
+            log("No suitable format found")
+            ytdlp_logs.append(log_entry)
+            if len(ytdlp_logs) > 10:
+                ytdlp_logs.pop(0)
             return None
+        
+        log_entry["success"] = True
+        ytdlp_logs.append(log_entry)
+        if len(ytdlp_logs) > 10:
+            ytdlp_logs.pop(0)
         
         return {
             "title": data.get('title', 'Unknown'),
@@ -92,9 +113,17 @@ def extract_youtube_stream(video_id):
         }
     except subprocess.TimeoutExpired:
         log("yt-dlp timeout")
+        log_entry["stderr"] = "Timeout (30s exceeded)"
+        ytdlp_logs.append(log_entry)
+        if len(ytdlp_logs) > 10:
+            ytdlp_logs.pop(0)
         return None
     except Exception as e:
         log(f"Extraction error: {e}")
+        log_entry["stderr"] = str(e)
+        ytdlp_logs.append(log_entry)
+        if len(ytdlp_logs) > 10:
+            ytdlp_logs.pop(0)
         return None
 
 class ProxyServer:
