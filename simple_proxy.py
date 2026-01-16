@@ -165,6 +165,63 @@ class ProxyServer:
                     real_ip = line.split(b':', 1)[1].strip().split(b',')[0].strip().decode('utf-8', errors='ignore')
                 elif line.lower().startswith(b'x-proxy-trace-id:'):
                     trace_id = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
+                elif line.lower().startswith(b'host:'):
+                    current_host = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
+
+            # --- yt-dlp Extraction Endpoint: /ytdlp?id=... ---
+            if b'GET /ytdlp' in first_line:
+                try:
+                    path = first_line.split(b' ')[1].decode('utf-8')
+                    parsed = urlparse(path)
+                    qs = parse_qs(parsed.query)
+                    video_id = qs.get('id', [None])[0]
+
+                    if not video_id:
+                        client_socket.send(b"HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nMissing 'id' parameter\r\n")
+                        client_socket.close()
+                        return
+
+                    log(f"🎬 yt-dlp request for video ID: {video_id}")
+                    result = extract_youtube_stream(video_id)
+
+                    if not result:
+                        client_socket.send(b"HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n" + json.dumps({"error": "Failed to extract stream URL"}).encode('utf-8'))
+                        client_socket.close()
+                        return
+                    
+                    try:
+                        original_url = result.get('url')
+                        if original_url:
+                            encoded_url = quote(original_url)
+                            # Force HTTP (since proxy is HTTP)
+                            proxy_url = f"http://{current_host}/stream?url={encoded_url}"
+                            result['url'] = proxy_url
+                            result['original_url'] = original_url
+                            
+                            log(f"✅ Extracted Original URL: {original_url[:60]}...")
+                            log(f"🔄 Rewrote URL for Proxy: {proxy_url}")
+                    except Exception as rewrite_err:
+                        log(f"⚠️ URL Rewrite Failed: {rewrite_err}")
+
+                    response_body = json.dumps(result).encode('utf-8')
+                    response = (
+                        b"HTTP/1.1 200 OK\r\n"
+                        b"Content-Type: application/json\r\n"
+                        b"Access-Control-Allow-Origin: *\r\n"
+                        b"Connection: close\r\n"
+                        b"Content-Length: " + str(len(response_body)).encode() + b"\r\n\r\n"
+                        + response_body
+                    )
+                    client_socket.send(response)
+                    log(f"✅ sent response for {video_id}")
+                    client_socket.close()
+                    return
+
+                except Exception as e:
+                    log(f"❌ yt-dlp Endpoint Error: {e}")
+                    client_socket.send(b"HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n" + str(e).encode('utf-8'))
+                    client_socket.close()
+                    return
 
             # --- Stream Relay Endpoint: /stream?url=... ---
             if b'GET /stream' in first_line:
