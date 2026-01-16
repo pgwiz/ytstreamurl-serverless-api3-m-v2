@@ -52,7 +52,6 @@ def extract_youtube_stream(video_id):
             "--no-check-certificate",
             "--dump-single-json",
             "--no-playlist",
-            "--force-ipv4", # Ensure URL is signed for IPv4 (matching our AF_INET socket)
             "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]" # progressive only (no HLS)
         ]
         
@@ -297,13 +296,11 @@ class ProxyServer:
                     if target_parsed.query:
                         target_path += "?" + target_parsed.query
 
-                    # Connect to Google Video
-                    remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    remote_socket.connect((hostname, port))
+                    # Connect to Google Video (Dual Stack Support)
+                    # socket.create_connection handles IPv4 and IPv6 resolution automatically
+                    remote_socket = socket.create_connection((hostname, port), timeout=30)
                     
-                    # If HTTPS (likely), wrap socket?
-                    # simple_proxy handles CONNECT for HTTPS, but here we are acting as the client.
-                    # We need SSL for googlevideo.com
+                    # If HTTPS (likely), wrap socket
                     if target_parsed.scheme == 'https' or port == 443:
                         import ssl
                         ctx = ssl.create_default_context()
