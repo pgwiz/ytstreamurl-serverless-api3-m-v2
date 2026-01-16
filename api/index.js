@@ -180,13 +180,18 @@ function createYtdlAgent() {
     // Create the agent
     // If no proxy and no cookies, returns default
     if (!agentOptions[0] && !agentOptions[1].dispatcher) {
+        console.log('No agent needed (no cookies, no proxy)');
         return undefined;
     }
 
     try {
-        return ytdl.createAgent(agentOptions[0], agentOptions[1]);
+        const agent = ytdl.createAgent(agentOptions[0], agentOptions[1]);
+        console.log(`✅ ytdl Agent created with:`);
+        console.log(`   - Cookies: ${agentOptions[0] ? 'YES' : 'NO'}`);
+        console.log(`   - Proxy: ${agentOptions[1].dispatcher ? 'YES' : 'NO'}`);
+        return agent;
     } catch (err) {
-        console.log('Error creating YTDL agent:', err.message);
+        console.error('❌ Error creating YTDL agent:', err.message);
         return undefined;
     }
 }
@@ -393,6 +398,7 @@ async function getSpotifyAccessToken() {
 async function extractVideoInfo(videoUrl) {
     try {
         const agent = createYtdlAgent();
+        console.log(`Calling ytdl.getInfo with agent:`, agent ? 'CONFIGURED' : 'DEFAULT');
         const info = await ytdl.getInfo(videoUrl, { agent });
 
         const format = ytdl.chooseFormat(info.formats, {
