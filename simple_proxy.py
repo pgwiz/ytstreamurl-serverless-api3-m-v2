@@ -482,11 +482,16 @@ button:hover {{ background: #22c55e; }}
             # Construct new headers
             new_lines = []
             status_line = lines[0]
+            log(f"🌍 Upstream Status: {status_line.decode('utf-8', errors='ignore')}")
+            
             new_lines.append(status_line)
             
             # Filter and add headers
             has_cors = False
             for line in lines[1:]:
+                if line.lower().startswith(b"content-type:"):
+                    log(f"📄 Upstream Content-Type: {line.decode('utf-8', errors='ignore')}")
+                
                 if line.lower().startswith(b"access-control-allow-origin"):
                     has_cors = True
                     new_lines.append(b"Access-Control-Allow-Origin: *") # Force wildcard
