@@ -46,7 +46,8 @@ class ProxyServer:
             
             while True:
                 client_socket, addr = self.server_socket.accept()
-                log(f"📥 Connection from {addr[0]}")
+                # log(f"📥 Connection from {addr[0]}") # Defer logging until headers are parsed
+                # log(f"📥 Connection from {addr[0]}") # Defer logging until headers are parsed
                 client_handler = threading.Thread(target=self.handle_client, args=(client_socket, addr))
                 client_handler.daemon = True
                 client_handler.start()
@@ -63,6 +64,21 @@ class ProxyServer:
                 return
 
             first_line = request.split(b'\n')[0]
+            
+            # Extract Real IP from Nginx Headers
+            real_ip = addr[0]
+            for line in request.split(b'\n'):
+                if line.lower().startswith(b'x-real-ip:'):
+                    real_ip = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
+                    break
+                elif line.lower().startswith(b'x-forwarded-for:'):
+                    # Take the first IP in the list
+                    real_ip = line.split(b':', 1)[1].strip().split(b',')[0].strip().decode('utf-8', errors='ignore')
+                    break
+            
+            # Log connection now with real IP
+            if not (b'GET /health' in first_line or b'GET / HTTP' in first_line):
+                 log(f"📥 Request from {real_ip}")
             
             # --- Health Check Endpoint ---
             if b'GET /health' in first_line or b'GET / HTTP' in first_line:
