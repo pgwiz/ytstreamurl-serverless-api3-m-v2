@@ -47,7 +47,8 @@ else
 fi
 
 # Force download (always replace)
-curl -fsSL "$GITHUB_RAW_URL" -o "$TARGET_FILE.new"
+# Append random query param to bypass GitHub Raw caching
+curl -fsSL "${GITHUB_RAW_URL}?t=$(date +%s)" -o "$TARGET_FILE.new"
 
 NEW_HASH=$(md5sum "$TARGET_FILE.new" 2>/dev/null | awk '{print $1}')
 
