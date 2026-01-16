@@ -2,10 +2,25 @@ import socket
 import select
 import threading
 import sys
+import os
 from datetime import datetime
 
+# Log directory
+LOG_DIR = "/root/proxyLogs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
 def log(msg):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log_line = f"[{timestamp}] {msg}"
+    print(log_line, flush=True)
+    
+    # Also write to file (daily log)
+    log_file = os.path.join(LOG_DIR, f"proxy_{datetime.now().strftime('%Y-%m-%d')}.log")
+    try:
+        with open(log_file, 'a') as f:
+            f.write(log_line + '\n')
+    except:
+        pass
 
 # Configuration
 BIND_HOST = '::'  # Bind to all interfaces (IPv4 + IPv6 dual-stack)
