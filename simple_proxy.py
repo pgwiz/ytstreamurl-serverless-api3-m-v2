@@ -52,6 +52,7 @@ def extract_youtube_stream(video_id):
             "--no-check-certificate",
             "--dump-single-json",
             "--no-playlist",
+            "--force-ipv4", # Ensure URL is signed for IPv4 (matching our AF_INET socket)
             "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]" # progressive only (no HLS)
         ]
         
