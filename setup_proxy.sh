@@ -133,22 +133,24 @@ fi
 
 # Force download (always replace)
 # Append random query param to bypass GitHub Raw caching
-curl -fsSL "${GITHUB_RAW_URL}?t=$(date +%s)" -o "$TARGET_FILE.new"
+echo "   ⬇️  Downloading simple_proxy.py..."
+# Force fresh download by appending timestamp
+curl -fsSL -o "$TARGET_FILE.new" "https://raw.githubusercontent.com/pgwiz/ytstreamurl-serverless-api3-m-v2/main/simple_proxy.py?t=$(date +%s)"
 
-NEW_HASH=$(md5sum "$TARGET_FILE.new" 2>/dev/null | awk '{print $1}')
-
-if [ "$OLD_HASH" != "$NEW_HASH" ]; then
+# Check if file changed
+if [ ! -f "$TARGET_FILE" ]; then
     mv "$TARGET_FILE.new" "$TARGET_FILE"
-    chmod +x "$TARGET_FILE"
-    if [ -n "$OLD_HASH" ]; then
-        echo "   🔄 UPDATED: simple_proxy.py"
-        ALTERED_FILES="$ALTERED_FILES simple_proxy.py"
-    else
-        echo "   ✅ Downloaded: simple_proxy.py"
-    fi
+    echo "   ✅ Installed simple_proxy.py"
 else
-    rm -f "$TARGET_FILE.new"
-    echo "   ✅ No changes: simple_proxy.py (already up-to-date)"
+    # Simple check if content differs (ignoring timestamp comment if any)
+    if ! cmp -s "$TARGET_FILE" "$TARGET_FILE.new"; then
+        echo "   🔄 Updating simple_proxy.py (content changed)..."
+        mv "$TARGET_FILE.new" "$TARGET_FILE"
+        systemctl restart ${SERVICE_NAME}
+    else
+        rm -f "$TARGET_FILE.new"
+        echo "   ✅ No changes: simple_proxy.py (already up-to-date)"
+    fi
 fi
 
 # --- 3. Create Systemd Service ---
