@@ -4,7 +4,7 @@ import threading
 import sys
 
 # Configuration
-BIND_HOST = '0.0.0.0'
+BIND_HOST = '::'  # Bind to all interfaces (IPv4 + IPv6 dual-stack)
 BIND_PORT = 2082
 BUFFER_SIZE = 8192
 
@@ -12,8 +12,11 @@ class ProxyServer:
     def __init__(self, host, port):
         self.host = host
         self.port = port
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Use IPv6 socket with dual-stack (also accepts IPv4)
+        self.server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Allow IPv4 connections on this IPv6 socket
+        self.server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
 
     def start(self):
         try:
