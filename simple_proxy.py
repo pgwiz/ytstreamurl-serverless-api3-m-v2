@@ -186,6 +186,7 @@ class ProxyServer:
                             + response_body
                         )
                         log(f"✅ Stream extracted for {video_id}")
+                        log(f"🔗 Stream URL: {result.get('url')}")
                     else:
                         error_body = json.dumps({"error": "Failed to extract stream"}).encode('utf-8')
                         response = (
