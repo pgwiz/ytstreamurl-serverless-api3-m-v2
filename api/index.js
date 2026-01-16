@@ -31,15 +31,18 @@ let spotifyTokenExpiry = 0;
 function loadCookies() {
     const cookiePaths = [
         path.join(__dirname, 'cookies.txt'),
-        path.join(__dirname, '..', 'cookies.txt')
+        path.join(__dirname, '..', 'cookies.txt'),
+        path.join(process.cwd(), 'cookies.txt'),
+        path.join(process.cwd(), 'api', 'cookies.txt')
     ];
 
     for (const cookiePath of cookiePaths) {
         if (fs.existsSync(cookiePath)) {
+            console.log(`Found cookie file at: ${cookiePath}`);
             return cookiePath;
         }
     }
-    return null;
+    console.log('No cookie file found in searched paths');
     return null;
 }
 
