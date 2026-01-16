@@ -166,13 +166,6 @@ class ProxyServer:
                 elif line.lower().startswith(b'x-proxy-trace-id:'):
                     trace_id = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
 
-                except Exception as e:
-                    log(f"❌ API Error: {e}")
-                    # ... error handling ...
-                    client_socket.send(response)
-                    client_socket.close()
-                    return
-
             # --- Stream Relay Endpoint: /stream?url=... ---
             if b'GET /stream' in first_line:
                 try:
