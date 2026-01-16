@@ -79,11 +79,20 @@ function createYtdlAgent() {
     // 1. Resolve PROXY
     // ----------------
     if (process.env.PROXY) {
-        console.log(`Using Proxy: ${process.env.PROXY}`);
-        const proxyAgent = new ProxyAgent(process.env.PROXY);
+        const traceId = Math.random().toString(36).substring(7);
+        console.log(`Using Proxy: ${process.env.PROXY} [Trace: ${traceId}]`);
+
+        const proxyAgent = new ProxyAgent({
+            uri: process.env.PROXY,
+            headers: {
+                'X-Proxy-Trace-Id': traceId,
+                'User-Agent': 'Node/Undici-Proxy' // Ensure UA is present
+            }
+        });
+
         // ytdl.createAgent(cookies, options)
         // options: { dispatcher: ... }
-        agentOptions.push(undefined); // First arg is cookies (handled below), set undefined for now
+        agentOptions.push(undefined); // First arg is cookies (handled below)
         agentOptions.push({ dispatcher: proxyAgent });
     } else {
         agentOptions.push(undefined);

@@ -67,18 +67,21 @@ class ProxyServer:
             
             # Extract Real IP from Nginx Headers
             real_ip = addr[0]
+            trace_id = ""
             for line in request.split(b'\n'):
                 if line.lower().startswith(b'x-real-ip:'):
                     real_ip = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
-                    break
                 elif line.lower().startswith(b'x-forwarded-for:'):
-                    # Take the first IP in the list
                     real_ip = line.split(b':', 1)[1].strip().split(b',')[0].strip().decode('utf-8', errors='ignore')
-                    break
-            
-            # Log connection now with real IP
+                elif line.lower().startswith(b'x-proxy-trace-id:'):
+                    trace_id = line.split(b':', 1)[1].strip().decode('utf-8', errors='ignore')
+
+            # Log connection now with real IP and Trace ID
             if not (b'GET /health' in first_line or b'GET / HTTP' in first_line):
-                 log(f"📥 Request from {real_ip}")
+                 log_msg = f"📥 Request from {real_ip}"
+                 if trace_id:
+                     log_msg += f" [Trace: {trace_id}]"
+                 log(log_msg)
             
             # --- Health Check Endpoint ---
             if b'GET /health' in first_line or b'GET / HTTP' in first_line:
