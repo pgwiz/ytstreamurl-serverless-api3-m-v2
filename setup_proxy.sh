@@ -138,9 +138,40 @@ echo "============================================="
 echo "  ✅ Setup Complete!"
 echo "============================================="
 echo ""
-echo "  Proxy URL: http://<YOUR_SERVER_IP>:$PROXY_PORT"
+
+# --- Detect Server IP ---
+SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ -z "$SERVER_IP" ]; then
+    SERVER_IP="<YOUR_SERVER_IP>"
+fi
+
+echo "  Proxy URL: http://${SERVER_IP}:$PROXY_PORT"
 echo "  Or via Cloudflare Tunnel."
 echo ""
+
+# --- Detect Nginx Domains ---
+echo "  📋 Detected Nginx Domains:"
+if command -v nginx &> /dev/null; then
+    DOMAINS=$(grep -rh "server_name" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | \
+              grep -v "#" | \
+              sed 's/server_name//g' | \
+              sed 's/;//g' | \
+              tr -s ' ' '\n' | \
+              sort -u | \
+              grep -v "^$" | \
+              head -20)
+    if [ -n "$DOMAINS" ]; then
+        for domain in $DOMAINS; do
+            echo "     - $domain"
+        done
+    else
+        echo "     (No domains found in Nginx config)"
+    fi
+else
+    echo "     (Nginx not installed)"
+fi
+echo ""
+
 echo "  Commands:"
 echo "    Status:  systemctl status ${SERVICE_NAME}"
 echo "    Logs:    journalctl -u ${SERVICE_NAME} -f"
