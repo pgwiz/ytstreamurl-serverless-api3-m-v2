@@ -24,7 +24,7 @@ def log(msg):
 
 # Configuration
 BIND_HOST = '::'  # Bind to all interfaces (IPv4 + IPv6 dual-stack)
-BIND_PORT = 2082
+BIND_PORT = 6178
 BUFFER_SIZE = 8192
 
 class ProxyServer:
