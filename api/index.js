@@ -77,7 +77,8 @@ import { ProxyAgent } from 'undici';
 async function testProxyConnection(proxyUrl) {
     try {
         const testUrl = `${proxyUrl}/health`;
-        console.log(`Testing proxy connection: ${testUrl}`);
+        console.log(`\n========== PROXY TEST ==========`);
+        console.log(`URL: ${testUrl}`);
 
         const response = await fetch(testUrl, {
             method: 'GET',
@@ -86,14 +87,22 @@ async function testProxyConnection(proxyUrl) {
 
         if (response.ok) {
             const body = await response.text();
-            console.log(`✅ Proxy connection SUCCESS! Response: ${body.substring(0, 50)}...`);
+            console.log(`✅ CONNECTION SUCCESS!`);
+            console.log(`   Status: ${response.status}`);
+            console.log(`   Response: ${body.substring(0, 60).trim()}`);
+            console.log(`================================\n`);
             return true;
         } else {
-            console.error(`⚠️ Proxy responded with status ${response.status}`);
+            console.error(`❌ CONNECTION FAILED`);
+            console.error(`   Status: ${response.status}`);
+            console.log(`================================\n`);
             return false;
         }
     } catch (error) {
-        console.error(`❌ Proxy connection FAILED: ${error.message}`);
+        console.error(`❌ CONNECTION FAILED`);
+        console.error(`   Error: ${error.message}`);
+        console.error(`   This means Vercel CANNOT reach the proxy!`);
+        console.log(`================================\n`);
         return false;
     }
 }
