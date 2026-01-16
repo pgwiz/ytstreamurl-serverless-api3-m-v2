@@ -89,8 +89,8 @@ EOF
 
 systemctl daemon-reload
 systemctl enable ${SERVICE_NAME}
-systemctl start ${SERVICE_NAME}
-echo "   ✅ Service '${SERVICE_NAME}' created and started."
+systemctl restart ${SERVICE_NAME}
+echo "   ✅ Service '${SERVICE_NAME}' created and (re)started."
 
 # --- 4. Configure Nginx (Stream Proxy for TCP) ---
 echo "[4/5] Configuring Nginx for port $PROXY_PORT..."
