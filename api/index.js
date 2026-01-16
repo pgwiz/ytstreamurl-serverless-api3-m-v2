@@ -466,7 +466,9 @@ async function extractVideoInfo(videoUrl) {
 
 // Helper to extract video ID from URL
 function extractVideoId(url) {
-    const match = url.match(/(?:v=|\/)([\w-]{11})/);
+    if (!url) return null;
+    if (url.length === 11) return url;
+    const match = url.match(/(?:v=|\/|youtu\.be\/|embed\/)([\w-]{11})/);
     return match ? match[1] : url;
 }
 
