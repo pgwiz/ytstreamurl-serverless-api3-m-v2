@@ -30,13 +30,16 @@ if ! command -v nginx &> /dev/null; then
 fi
 
 # Cleanup Recursive Configs
-rm -f /etc/nginx/sites-enabled/proxy-proxy-* 2>/dev/null
-rm -f /etc/nginx/sites-available/proxy-proxy-* 2>/dev/null
+echo "   🧹 Cleaning up old proxy configs..."
+rm -f /etc/nginx/sites-enabled/proxy-* 2>/dev/null
+rm -f /etc/nginx/sites-available/proxy-* 2>/dev/null
+# Restart to clear them from memory before re-adding
+systemctl reload nginx 2>/dev/null
 
-# Detect domain (excluding existing proxy- configs)
+# Detect domain (excluding default and backup)
 PROXY_DOMAIN=""
 if [ -d /etc/nginx/sites-enabled ]; then
-    # find valid domains, exclude default, backup, and our own proxy- files
+    # find valid base domains only (no proxy- prefix)
     PROXY_DOMAIN=$(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -v "default" | grep -v ".backup" | grep -v "^proxy-" | head -1)
 fi
 
