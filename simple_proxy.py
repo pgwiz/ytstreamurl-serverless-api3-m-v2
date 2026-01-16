@@ -272,12 +272,17 @@ class ProxyServer:
             if b'GET /stream' in first_line:
                 try:
                     # Parse URL from query string
-                    path = first_line.split(b' ')[1].decode('utf-8')
-                    parsed = urlparse(path)
+                    path_str = first_line.split(b' ')[1].decode('utf-8')
+                    parsed = urlparse(path_str)
                     qs = parse_qs(parsed.query)
                     target_url = qs.get('url', [None])[0]
+                    
+                    log(f"🔎 DEBUG: Query: {parsed.query}")
+                    if target_url:
+                        log(f"🔎 DEBUG: Decoded Target: {target_url}")
 
                     if not target_url:
+                        log("❌ No target URL found in query")
                         client_socket.close()
                         return
 
