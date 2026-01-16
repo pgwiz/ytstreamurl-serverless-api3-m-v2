@@ -44,6 +44,7 @@ Create a `.env` file or set in Vercel:
 | `SPOTIFY_CLIENT_ID` | Your Spotify Client ID |
 | `SPOTIFY_CLIENT_SECRET` | Your Spotify Client Secret |
 | `PLAYGROUND` | Set to `true` to enable `/playground` |
+| `COOKIES` | Netscape format cookies (string) or JSON array (optional) |
 
 ---
 

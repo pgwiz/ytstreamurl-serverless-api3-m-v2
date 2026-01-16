@@ -45,13 +45,35 @@ function loadCookies() {
 const cookieFile = loadCookies();
 
 function createYtdlAgent() {
-    if (cookieFile) {
+    let cookieContent = null;
+
+    // 1. Try Environment Variable
+    if (process.env.COOKIES) {
+        cookieContent = process.env.COOKIES;
+        console.log('Using cookies from Environment Variable');
+    }
+    // 2. Try File
+    else if (cookieFile) {
         try {
-            return ytdl.createAgent(undefined, cookieFile);
-        } catch (error) {
-            console.log('Could not create agent with cookies, using default');
+            cookieContent = fs.readFileSync(cookieFile, 'utf8');
+            console.log('Using cookies from file:', cookieFile);
+        } catch (e) {
+            console.log('Error reading cookie file:', e.message);
         }
     }
+
+    if (cookieContent) {
+        try {
+            // Try to parse as JSON (if user provided array)
+            const cookies = JSON.parse(cookieContent);
+            return ytdl.createAgent(undefined, { cookies });
+        } catch (e) {
+            // If JSON parse fails, assume Netscape string
+            return ytdl.createAgent(undefined, { cookies: cookieContent });
+        }
+    }
+
+    // Default agent (no cookies)
     return undefined;
 }
 
@@ -230,7 +252,12 @@ async function extractVideoInfo(videoUrl) {
 // --- Extract YouTube Playlist using ytpl ---
 async function extractPlaylistInfo(playlistUrl) {
     try {
-        const playlist = await ytpl(playlistUrl, { limit: Infinity });
+        const agent = createYtdlAgent();
+        const options = { limit: Infinity };
+        if (agent) {
+            options.requestOptions = { agent }; // ytpl uses miniget which accepts agent in requestOptions
+        }
+        const playlist = await ytpl(playlistUrl, options);
 
         const tracks = playlist.items.map(item => ({
             title: item.title || 'Untitled',
