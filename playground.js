@@ -181,7 +181,15 @@ function playTrack(track) {
     playerArtist.textContent = track.artist || 'Unknown Artist';
     playerThumb.src = track.thumbnail || '';
 
+    log(`🎵 Setting Audio Source: ${track.url}`);
     audioElement.src = track.url;
+
+    // Log media events to debug "No supported source"
+    audioElement.onerror = (e) => {
+        const err = audioElement.error;
+        log(`❌ Media Error: Code ${err.code}, Message: ${err.message || 'None'}`);
+    };
+
     audioElement.play().catch(e => log(`Playback failed: ${e.message}`));
 }
 
