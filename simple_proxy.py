@@ -5,7 +5,7 @@ import sys
 
 # Configuration
 BIND_HOST = '0.0.0.0'
-BIND_PORT = 6178
+BIND_PORT = 2082
 BUFFER_SIZE = 8192
 
 class ProxyServer:
@@ -52,7 +52,7 @@ class ProxyServer:
                         break
                 # If the Host header points to our proxy (localhost, 127.x, :6178, or known domains)
                 # Add your proxy domain here for direct response
-                is_local = b'localhost' in host_header or b'127.' in host_header or b':6178' in host_header
+                is_local = b'localhost' in host_header or b'127.' in host_header or b':2082' in host_header
                 is_proxy_domain = b'servx.pgwiz.us.kg' in host_header or b'pgwiz' in host_header
                 
                 if is_local or is_proxy_domain:

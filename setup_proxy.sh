@@ -8,7 +8,7 @@
 set -e  # Exit on error
 
 # --- Configuration ---
-PROXY_PORT=6178
+PROXY_PORT=2082
 INSTALL_DIR="/opt/proxy_server"
 SERVICE_NAME="proxy_server"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/pgwiz/ytstreamurl-serverless-api3-m-v2/main/simple_proxy.py"
