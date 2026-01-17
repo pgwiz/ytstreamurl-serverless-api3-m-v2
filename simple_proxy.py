@@ -182,9 +182,10 @@ class ProxyServer:
                             original_url = result.get('url')
                             if original_url:
                                 encoded_url = quote(original_url)
-                                # Force HTTP and Port 2082 as requested by user
+                                # Force HTTPS and /streamytlink path as requested for Port 80/443 integration
+                                # This resolves Mixed Content errors by using standard HTTPS
                                 domain_only = current_host.split(':')[0]
-                                proxy_url = f"http://{domain_only}:2082/stream?url={encoded_url}"
+                                proxy_url = f"https://{domain_only}/streamytlink?url={encoded_url}"
                                 result['url'] = proxy_url
                                 result['original_url'] = original_url
                                 log(f"🔄 Rewrote URL: {proxy_url[:60]}...")
@@ -214,8 +215,8 @@ class ProxyServer:
                     client_socket.close()
                     return
 
-            # --- New Stream Relay Endpoint: /stream?url=... ---
-            if b'GET /stream' in first_line:
+            # --- New Stream Relay Endpoint: /streamytlink OR /stream ---
+            if b'GET /stream' in first_line or b'GET /streamytlink' in first_line:
                 try:
                     path = first_line.split(b' ')[1].decode('utf-8')
                     parsed = urlparse(path)
@@ -304,9 +305,9 @@ class ProxyServer:
                         original_url = result.get('url')
                         if original_url:
                             encoded_url = quote(original_url)
-                            # Force HTTP and Port 2082 as requested by user
+                            # Force HTTPS and /streamytlink path
                             domain_only = current_host.split(':')[0]
-                            proxy_url = f"http://{domain_only}:2082/stream?url={encoded_url}"
+                            proxy_url = f"https://{domain_only}/streamytlink?url={encoded_url}"
                             result['url'] = proxy_url
                             result['original_url'] = original_url
                             

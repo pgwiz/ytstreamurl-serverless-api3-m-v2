@@ -239,9 +239,20 @@ server {
     location /stream {
         proxy_pass http://127.0.0.1:$INTERNAL_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    location /streamytlink {
+        proxy_pass http://127.0.0.1:$INTERNAL_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         
         proxy_connect_timeout 60s;
         proxy_read_timeout 60s;
