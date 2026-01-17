@@ -429,7 +429,11 @@ async function extractVideoInfo(videoUrl) {
                     id: videoId,
                     videoId: videoId,
                     name: data.title || 'Untitled',
-                    artist: data.uploader || 'Unknown'
+                    artist: data.uploader || 'Unknown',
+                    // Media Type Info
+                    ext: data.ext || 'mp4',
+                    isLive: data.is_live || false,
+                    format_id: data.format_id
                 };
             } catch (proxyError) {
                 console.error(`Proxy API failed: ${proxyError.message}, falling back to ytdl-core`);

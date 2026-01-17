@@ -159,13 +159,15 @@ async function fetchAndPlay(item) {
 
         if (data.streamUrl) {
             playTrack({
-                title: item.title || item.name, // Handle difference in keys
+                title: item.title || item.name,
                 artist: item.artist || item.uploader,
                 thumbnail: item.thumbnail,
                 url: data.streamUrl,
-                videoId: videoId
+                videoId: videoId,
+                ext: data.ext || 'mp4',
+                isLive: data.isLive
             });
-            log(`Success! Playing: ${item.name || item.title}`);
+            log(`Success! Playing: ${item.name || item.title} [${data.ext || 'mp4'}]`);
         } else {
             log('Failed to get stream URL');
         }
