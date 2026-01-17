@@ -181,10 +181,12 @@ class ProxyServer:
                         try:
                             original_url = result.get('url')
                             if original_url:
-                                # User requested RAW URL (no proxy wrapper)
-                                result['url'] = original_url
+                                encoded_url = quote(original_url)
+                                # Force HTTPS to prevent Mixed Content errors on Vercel
+                                proxy_url = f"https://{current_host}/stream?url={encoded_url}"
+                                result['url'] = proxy_url
                                 result['original_url'] = original_url
-                                log(f"✅ Extracted URL: {original_url[:60]}...")
+                                log(f"🔄 Rewrote URL: {proxy_url[:60]}...")
                         except Exception as rw_err:
                             log(f"⚠️ Rewrite Error: {rw_err}")
 
@@ -235,11 +237,14 @@ class ProxyServer:
                     try:
                         original_url = result.get('url')
                         if original_url:
-                            # User requested RAW URL (no proxy wrapper)
-                            result['url'] = original_url
+                            encoded_url = quote(original_url)
+                            # Force HTTPS (since proxy is HTTP)
+                            proxy_url = f"https://{current_host}/stream?url={encoded_url}"
+                            result['url'] = proxy_url
                             result['original_url'] = original_url
                             
-                            log(f"✅ Extracted URL: {original_url[:60]}...")
+                            log(f"✅ Extracted Original URL: {original_url[:60]}...")
+                            log(f"🔄 Rewrote URL for Proxy: {proxy_url}")
                     except Exception as rewrite_err:
                         log(f"⚠️ URL Rewrite Failed: {rewrite_err}")
 
