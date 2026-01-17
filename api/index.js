@@ -806,10 +806,24 @@ app.get('/playground.js', (req, res) => {
     }
 });
 
+// Global Middleware to disable caching for all API responses
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
+    next();
+});
+
 // Get Stream Links (supports both videos and playlists)
 app.get('/get', async (req, res) => {
     // Attempt cleanup/management before processing
     managePlayerScripts();
+
+    // Disable Caching
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     const youtubeUrl = req.query.ytl;
     const limit = parseInt(req.query.limit, 10) || 5;
