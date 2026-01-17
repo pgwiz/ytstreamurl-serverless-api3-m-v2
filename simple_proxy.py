@@ -251,9 +251,18 @@ class ProxyServer:
                     if target_parsed.query:
                         req_path += '?' + target_parsed.query
                         
+                    # Extract Range header from client request if present
+                    range_header = ""
+                    for line in request.split(b'\r\n'):
+                        if line.lower().startswith(b'range:'):
+                            range_header = line.decode('utf-8', errors='ignore') + "\r\n"
+                            log(f"⏩ Forwarding {range_header.strip()}")
+                            break
+                        
                     req = (f"GET {req_path} HTTP/1.1\r\n"
                            f"Host: {hostname}\r\n"
                            f"User-Agent: Mozilla/5.0\r\n"
+                           f"{range_header}"
                            f"Connection: close\r\n\r\n").encode('utf-8')
                     
                     remote_socket.send(req)
