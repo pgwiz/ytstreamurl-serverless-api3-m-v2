@@ -210,6 +210,10 @@ systemctl reload nginx 2>/dev/null
 server {
     listen $PROXY_PORT default_server;
     listen [::]:$PROXY_PORT default_server;
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    listen 8080 default_server;
+    listen [::]:8080 default_server;
     server_name _;
     
     # Log all requests reaching nginx on this port
@@ -221,6 +225,17 @@ server {
     client_header_buffer_size 64k;
     client_body_buffer_size 64k;
     client_max_body_size 10M;
+
+    location /stream {
+        proxy_pass http://127.0.0.1:$INTERNAL_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        
+        proxy_connect_timeout 60s;
+        proxy_read_timeout 60s;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:$INTERNAL_PORT;
