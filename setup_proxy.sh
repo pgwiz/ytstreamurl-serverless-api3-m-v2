@@ -210,10 +210,6 @@ systemctl reload nginx 2>/dev/null
 server {
     listen $PROXY_PORT default_server;
     listen [::]:$PROXY_PORT default_server;
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    listen 8080 default_server;
-    listen [::]:8080 default_server;
     server_name _;
     
     # Log all requests reaching nginx on this port
@@ -263,7 +259,8 @@ EOF
         systemctl reload nginx
         echo "   ✅ Nginx configured: http://<your-ip>:$PROXY_PORT"
     else
-        echo "   ❌ Nginx config test failed. Check: nginx -t"
+        echo "   ❌ Nginx config test failed:"
+        nginx -t
         rm -f "/etc/nginx/sites-enabled/proxy-default"
     fi
 
