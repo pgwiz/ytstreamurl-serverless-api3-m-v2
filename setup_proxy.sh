@@ -195,6 +195,7 @@ echo "   🧹 Cleaning up old proxy configs..."
 rm -f /etc/nginx/sites-enabled/proxy-* 2>/dev/null
 rm -f /etc/nginx/sites-available/proxy-* 2>/dev/null
 # Restart to clear them from memory before re-adding
+rm -f /etc/nginx/sites-enabled/default 2>/dev/null
 systemctl reload nginx 2>/dev/null
 
     # Always create nginx config for the proxy
@@ -214,6 +215,12 @@ server {
     # Log all requests reaching nginx on this port
     access_log /var/log/nginx/proxy_access.log;
     error_log /var/log/nginx/proxy_error.log;
+
+    # Handle Long URLs (Essential for YouTube Streams)
+    large_client_header_buffers 4 64k;
+    client_header_buffer_size 64k;
+    client_body_buffer_size 64k;
+    client_max_body_size 10M;
 
     location / {
         proxy_pass http://127.0.0.1:$INTERNAL_PORT;
