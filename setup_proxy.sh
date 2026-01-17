@@ -15,7 +15,7 @@ SERVICE_NAME="proxy_server"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/pgwiz/ytstreamurl-serverless-api3-m-v2/main/simple_proxy.py"
 
 echo "============================================="
-echo "  🚀 Proxy Server Setup"
+echo "  🚀 Proxy Server Setup (v3.5 - Escaped Fix)"
 echo "============================================="
 
 # --- 1. Check Python ---
