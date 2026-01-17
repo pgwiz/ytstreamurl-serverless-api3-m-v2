@@ -259,7 +259,9 @@ class ProxyServer:
                     remote_socket.send(req)
                     
                     # Relay Response
-                    self.forward_response_with_cors(remote_socket, client_socket)
+                    # Definition: def forward_response_with_cors(self, client, remote):
+                    # Call: forward_response_with_cors(client_socket, remote_socket)
+                    self.forward_response_with_cors(client_socket, remote_socket)
                     return
                     
                 except Exception as e:
