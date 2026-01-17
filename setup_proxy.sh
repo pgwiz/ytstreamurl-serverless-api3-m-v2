@@ -289,11 +289,50 @@ EOF
         rm -f "/etc/nginx/sites-enabled/proxy-default"
     fi
 
-# --- 5. Verify ---
-echo "[5/5] Verifying..."
-sleep 2
+# --- 5. Generate Integration Snippet ---
+echo "[5/6] Creating Integration Snippet..."
+SNIPPET_FILE="/etc/nginx/snippets/yt-proxy.conf"
+mkdir -p /etc/nginx/snippets
+cat > "$SNIPPET_FILE" <<EOF
+# YouTube Stream Proxy Integration
+location /streamytlink {
+    proxy_pass http://127.0.0.1:$INTERNAL_PORT;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_connect_timeout 60s;
+    proxy_read_timeout 60s;
+}
+EOF
+echo "   ✅ Created snippet: $SNIPPET_FILE"
+
+# --- 6. Integration Guide ---
+echo "[6/6] Checking for Main Domains..."
+DOMAINS_FOUND=0
+echo "   ℹ️  To enable https://<your-domain>/streamytlink, run the command below for your site:"
+echo ""
+
+for conf in /etc/nginx/sites-enabled/*; do
+    if [ "$conf" != "$NGINX_PROXY_CONF" ] && [ "$conf" != "/etc/nginx/sites-enabled/default" ]; then
+        if [ -f "$conf" ]; then
+            DOMAINS_FOUND=1
+            SITE_NAME=$(basename "$conf")
+            echo "   🔹 For site: $SITE_NAME ($conf)"
+            echo "      👉 sudo sed -i '/location \/ {/i include /etc/nginx/snippets/yt-proxy.conf;' $conf && sudo systemctl reload nginx"
+            echo ""
+        fi
+    fi
+done
+
+if [ $DOMAINS_FOUND -eq 0 ]; then
+    echo "   (No active custom sites found in /etc/nginx/sites-enabled/)"
+fi
+
+# --- 7. Verify ---
+echo "[7/7] Verifying Service..."
 if systemctl is-active --quiet ${SERVICE_NAME}; then
-    echo "   ✅ Proxy service is RUNNING on port $INTERNAL_PORT (Backend) -> $PROXY_PORT (Nginx)"
+    echo "   ✅ Proxy service is RUNNING on port $INTERNAL_PORT (Backend)"
 else
     echo "   ❌ Service failed to start. Check logs: journalctl -u ${SERVICE_NAME}"
 fi

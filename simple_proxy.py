@@ -305,7 +305,8 @@ class ProxyServer:
                         original_url = result.get('url')
                         if original_url:
                             encoded_url = quote(original_url)
-                            # Force HTTPS and /streamytlink path
+                            # Force HTTPS and /streamytlink path for Main Domain Integration
+                            # Nginx on Port 443 will route this to us
                             domain_only = current_host.split(':')[0]
                             proxy_url = f"https://{domain_only}/streamytlink?url={encoded_url}"
                             result['url'] = proxy_url
