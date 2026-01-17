@@ -209,7 +209,7 @@ systemctl reload nginx 2>/dev/null
 # Proxy server for ANY domain on port $PROXY_PORT
 server {
     listen $PROXY_PORT default_server;
-    listen [::]:$PROXY_PORT default_server;
+    # IPv6 removed to prevent 'duplicate listen options' or bind conflicts on some systems
     server_name _;
     
     # Log all requests reaching nginx on this port
