@@ -213,6 +213,60 @@ class ProxyServer:
                     client_socket.close()
                     return
 
+            # --- New Stream Relay Endpoint: /stream?url=... ---
+            if b'GET /stream' in first_line:
+                try:
+                    path = first_line.split(b' ')[1].decode('utf-8')
+                    parsed = urlparse(path)
+                    qs = parse_qs(parsed.query)
+                    target_url = qs.get('url', [None])[0]
+
+                    if not target_url:
+                        client_socket.send(b"HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nMissing 'url' parameter\r\n")
+                        client_socket.close()
+                        return
+
+                    log(f"📥 Relay Request for: {target_url[:60]}...")
+                    
+                    # Use existing proxy logic to forward this specific URL
+                    # We can reuse the generic proxy logic by setting 'url' and skipping parsing
+                    # But better to call a cleaner handler
+                    
+                    # Parse target to get host/port
+                    target_parsed = urlparse(target_url)
+                    hostname = target_parsed.hostname
+                    port = target_parsed.port or (443 if target_parsed.scheme == 'https' else 80)
+                    
+                    # Connect to Upstream (Dual Stack)
+                    remote_socket = socket.create_connection((hostname, port), timeout=30)
+                    if target_parsed.scheme == 'https':
+                        import ssl
+                        ctx = ssl.create_default_context()
+                        ctx.check_hostname = False
+                        ctx.verify_mode = ssl.CERT_NONE
+                        remote_socket = ctx.wrap_socket(remote_socket, server_hostname=hostname)
+
+                    # Send Request to Upstream
+                    req_path = target_parsed.path
+                    if target_parsed.query:
+                        req_path += '?' + target_parsed.query
+                        
+                    req = (f"GET {req_path} HTTP/1.1\r\n"
+                           f"Host: {hostname}\r\n"
+                           f"User-Agent: Mozilla/5.0\r\n"
+                           f"Connection: close\r\n\r\n").encode('utf-8')
+                    
+                    remote_socket.send(req)
+                    
+                    # Relay Response
+                    self.forward_response_with_cors(remote_socket, client_socket)
+                    return
+                    
+                except Exception as e:
+                    log(f"❌ Stream Relay Error: {e}")
+                    client_socket.close()
+                    return
+
             # --- yt-dlp Extraction Endpoint: /ytdlp?id=... ---
             if b'GET /ytdlp' in first_line:
                 try:
