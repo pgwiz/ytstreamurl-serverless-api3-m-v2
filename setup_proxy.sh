@@ -181,6 +181,20 @@ systemctl enable ${SERVICE_NAME}
 systemctl restart ${SERVICE_NAME}
 echo "   ✅ Service '${SERVICE_NAME}' created and (re)started."
 
+# --- 3b. Configure Firewall (UFW) ---
+if command -v ufw &> /dev/null; then
+    echo "[3b/5] Configuring Firewall..."
+    if ufw status | grep -q "Active"; then
+        echo "   🛡️  UFW is active. Allowing port $PROXY_PORT..."
+        ufw allow $PROXY_PORT/tcp
+        ufw allow 80/tcp
+        ufw allow 443/tcp
+        ufw reload
+    else
+        echo "   ℹ️  UFW is inactive. Skipping firewall rules."
+    fi
+fi
+
 # --- 4. Configure Nginx ---
 echo "[4/5] Configuring Nginx..."
 
