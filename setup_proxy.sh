@@ -220,10 +220,10 @@ systemctl reload nginx 2>/dev/null
     echo "   🌐 Configuring Nginx on port $PROXY_PORT (Catch-all)..."
     
     cat > "$NGINX_PROXY_CONF" <<EOF
-# Proxy server for ANY domain on port $PROXY_PORT
 server {
     listen $PROXY_PORT default_server;
-    # IPv6 removed to prevent 'duplicate listen options' or bind conflicts on some systems
+    # Enable IPv6 explicitly to support Cloudflare (ipv6only=on prevents conflict with IPv4 listener)
+    listen [::]:$PROXY_PORT default_server ipv6only=on;
     server_name _;
     
     # Log all requests reaching nginx on this port
