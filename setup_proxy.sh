@@ -307,26 +307,52 @@ location /streamytlink {
 EOF
 echo "   ✅ Created snippet: $SNIPPET_FILE"
 
-# --- 6. Integration Guide ---
+# --- 6. Integration Guide (Interactive) ---
 echo "[6/6] Checking for Main Domains..."
 DOMAINS_FOUND=0
-echo "   ℹ️  To enable https://<your-domain>/streamytlink, run the command below for your site:"
-echo ""
 
 for conf in /etc/nginx/sites-enabled/*; do
-    if [ "$conf" != "$NGINX_PROXY_CONF" ] && [ "$conf" != "/etc/nginx/sites-enabled/default" ]; then
-        if [ -f "$conf" ]; then
-            DOMAINS_FOUND=1
-            SITE_NAME=$(basename "$conf")
-            echo "   🔹 For site: $SITE_NAME ($conf)"
-            echo "      👉 sudo sed -i '/location \/ {/i include /etc/nginx/snippets/yt-proxy.conf;' $conf && sudo systemctl reload nginx"
-            echo ""
+    # Skip our own proxy config and the default fallback
+    if [ "$conf" != "$NGINX_PROXY_CONF" ] && [ "$conf" != "/etc/nginx/sites-enabled/default" ] && [ -f "$conf" ]; then
+        DOMAINS_FOUND=1
+        SITE_NAME=$(basename "$conf")
+        
+        echo ""
+        echo "   🔹 Found active site: $SITE_NAME ($conf)"
+        
+        # Check if already installed
+        if grep -q "yt-proxy.conf" "$conf"; then
+            echo "      ✅ Already configured. Skipping."
+            continue
+        fi
+
+        # Ask user for confirmation
+        read -p "      ❓ Enable Video Proxy integration for $SITE_NAME? (y/N) " -r < /dev/tty
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "      ⚙️  Injecting rules..."
+            # Inject include directive before 'location /' block or inside server block if no location / match found easily?
+            # Safest is usually before location /
+            if grep -q "location / {" "$conf"; then
+                sed -i '/location \/ {/i \    include /etc/nginx/snippets/yt-proxy.conf;' "$conf"
+                echo "      ✅ Injected successfully."
+                SHOULD_RELOAD=1
+            else
+                echo "      ⚠️  Could not find 'location / {' block. Please add manually:"
+                echo "          include /etc/nginx/snippets/yt-proxy.conf;"
+            fi
+        else
+            echo "      ⏭️  Skipping."
         fi
     fi
 done
 
 if [ $DOMAINS_FOUND -eq 0 ]; then
     echo "   (No active custom sites found in /etc/nginx/sites-enabled/)"
+fi
+
+if [ "${SHOULD_RELOAD:-0}" -eq 1 ]; then
+    echo "   🔄 Reloading Nginx to apply changes..."
+    systemctl reload nginx
 fi
 
 # --- 7. Verify ---
