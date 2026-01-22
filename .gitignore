@@ -4,3 +4,5 @@ node_modules/
 .vercel/
 yt_ai_doc.md
 *-player-script.js
+__pycache__/
+*.pyc

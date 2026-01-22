@@ -13,9 +13,21 @@
                     "playground.js"
                 ]
             }
+        },
+        {
+            "src": "api/proxy.py",
+            "use": "@vercel/python"
         }
     ],
     "routes": [
+        {
+            "src": "/proxy/(.*)",
+            "dest": "api/proxy.py"
+        },
+        {
+            "src": "/proxy",
+            "dest": "api/proxy.py"
+        },
         {
             "src": "/(.*)",
             "dest": "api/index.js"
