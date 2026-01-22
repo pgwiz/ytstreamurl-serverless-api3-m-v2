@@ -1,9 +1,13 @@
+import os
 from flask import Flask, request, Response
 import requests
 from http.server import BaseHTTPRequestHandler
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# Configurable domain for homepage logic
+PROXY_DOMAIN = os.environ.get('PROXY_DOMAIN', 'prx.pgwiz.cloud')
 
 @app.route('/health')
 def health():
@@ -16,10 +20,8 @@ def proxy(path):
     Standard HTTP Proxy forwarding with Homepage support.
     """
     # Homepage Logic: If the request is specifically for this server
-    if request.host == 'prx.pgwiz.cloud' and not path:
+    if request.host == PROXY_DOMAIN and not path:
         return "<h1>Hello John Doe</h1>"
-        
-    target_url = request.url
     
     try:
         # Exclude host header to avoid conflicts
