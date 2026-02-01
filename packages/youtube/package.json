@@ -1,0 +1,16 @@
+{
+  "name": "youtube-extractor-do",
+  "version": "1.0.0",
+  "description": "Digital Ocean serverless function for YouTube video extraction",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "NODE_ENV=development node index.js"
+  },
+  "dependencies": {
+    "@distube/ytdl-core": "^4.16.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

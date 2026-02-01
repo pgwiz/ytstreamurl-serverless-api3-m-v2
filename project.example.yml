@@ -1,0 +1,59 @@
+# Example Configuration File for Digital Ocean Functions
+# This is an alternative to project.yml with more options
+
+name: youtube-extractor
+description: YouTube video extraction serverless function with advanced configuration
+
+# Digital Ocean Functions configuration
+functions:
+  - name: youtube
+    # Runtime environment
+    runtime: nodejs:18
+    
+    # Source code location
+    source: packages/youtube
+    
+    # Environment variables (optional)
+    environment:
+      NODE_ENV: production
+      # Add custom environment variables here
+      # YTDL_NO_UPDATE: "true"  # Disable ytdl update checks
+    
+    # Resource limits
+    limits:
+      # Timeout in milliseconds (max: 900000 = 15 minutes)
+      timeout: 30000  # 30 seconds (default)
+      
+      # Memory in MB (64, 128, 256, 512, 1024, 2048, 3008)
+      memory: 256     # 256 MB (default)
+    
+    # Enable as web function (HTTP endpoint)
+    web: true
+    
+    # Advanced options (uncomment to use)
+    # annotations:
+    #   # Require authentication (set to false for public access)
+    #   require-whisk-auth: false
+    #   
+    #   # Raw HTTP handling (useful for streaming)
+    #   raw-http: false
+    #   
+    #   # Final action (for action sequences)
+    #   final: true
+    
+    # Binary support (uncomment if needed)
+    # binary: false
+
+# Global environment variables (optional)
+# environment:
+#   GLOBAL_VAR: value
+
+# Parameters (optional)
+# parameters:
+#   API_KEY: "your-api-key"
+
+# Notes:
+# 1. Keep timeout as low as possible to reduce costs
+# 2. Start with 256 MB memory and increase if needed
+# 3. Monitor function execution to optimize settings
+# 4. Use environment variables for configuration, not hardcoded values
