@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #dc2626, #ea580c, #f59e0b);
+        }
+
+        .loading {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen p-4">
+
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-8">
+                <!-- Header -->
+                <h1 class="text-4xl font-bold mb-2 text-center gradient-bg bg-clip-text text-transparent">
+                    🎬 YouTube Video Downloader
+                </h1>
+                <p class="text-center text-gray-400 mb-8">Extract and download YouTube videos & audio</p>
+
+                <!-- Input Section -->
+                <div class="bg-gray-900 rounded-xl p-6 mb-6">
+                    <label class="block text-sm font-medium mb-2 text-gray-300">YouTube Video URL</label>
+                    <input 
+                        type="text" 
+                        id="videoUrl" 
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                    >
+                    
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">Format</label>
+                            <select 
+                                id="format" 
+                                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                            >
+                                <option value="video">Video (with audio)</option>
+                                <option value="audio">Audio only</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">Quality</label>
+                            <select 
+                                id="quality" 
+                                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                            >
+                                <option value="highest">Highest</option>
+                                <option value="lowest">Lowest</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button 
+                        id="extractBtn"
+                        onclick="extractVideo()"
+                        class="w-full mt-4 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-lg font-semibold transition-all transform hover:scale-[1.02]"
+                    >
+                        Extract Video Info
+                    </button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading" class="hidden flex justify-center items-center py-8">
+                    <div class="loading"></div>
+                    <span class="ml-3 text-gray-400">Processing...</span>
+                </div>
+
+                <!-- Error Message -->
+                <div id="error" class="hidden bg-red-900/30 border border-red-700 rounded-lg p-4 mb-6">
+                    <p class="text-red-400" id="errorMessage"></p>
+                </div>
+
+                <!-- Result Section -->
+                <div id="result" class="hidden bg-gray-900 rounded-xl p-6">
+                    <h2 class="text-2xl font-bold mb-4 text-blue-400">Video Information</h2>
+                    
+                    <div class="flex gap-4 mb-4">
+                        <img id="thumbnail" class="w-48 h-auto rounded-lg" alt="Video thumbnail">
+                        <div class="flex-1">
+                            <h3 id="title" class="text-xl font-semibold mb-2"></h3>
+                            <p class="text-gray-400 mb-1">Author: <span id="author" class="text-white"></span></p>
+                            <p class="text-gray-400 mb-1">Duration: <span id="duration" class="text-white"></span></p>
+                            <p class="text-gray-400">Video ID: <span id="videoId" class="text-white"></span></p>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 rounded-lg p-4 mb-4">
+                        <h4 class="text-lg font-semibold mb-2 text-green-400">Download Format</h4>
+                        <p class="text-gray-400 mb-1">Type: <span id="formatType" class="text-white"></span></p>
+                        <p class="text-gray-400 mb-1">Quality: <span id="formatQuality" class="text-white"></span></p>
+                        <p class="text-gray-400 mb-1">Container: <span id="formatContainer" class="text-white"></span></p>
+                        <p class="text-gray-400">Codec: <span id="formatCodec" class="text-white"></span></p>
+                    </div>
+
+                    <a 
+                        id="downloadBtn"
+                        href="#" 
+                        target="_blank"
+                        class="block w-full text-center px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-lg font-semibold transition-all transform hover:scale-[1.02]"
+                    >
+                        📥 Download Now
+                    </a>
+                </div>
+
+                <!-- API Info -->
+                <div class="mt-8 bg-gray-900 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold mb-3 text-purple-400">🔧 API Endpoint</h3>
+                    <div class="bg-gray-800 p-3 rounded-lg">
+                        <code class="text-sm text-green-300">GET /youtube?url={videoUrl}&format={video|audio}&quality={highest|lowest}</code>
+                    </div>
+                    <p class="text-gray-400 text-sm mt-2">
+                        Use this endpoint to integrate with your applications
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configure your Digital Ocean Function URL here
+        const API_URL = '/youtube'; // Update with your DO function URL when deployed
+
+        async function extractVideo() {
+            const videoUrl = document.getElementById('videoUrl').value.trim();
+            const format = document.getElementById('format').value;
+            const quality = document.getElementById('quality').value;
+
+            // Validate URL
+            if (!videoUrl) {
+                showError('Please enter a YouTube video URL');
+                return;
+            }
+
+            // Hide previous results and errors
+            hideError();
+            hideResult();
+            showLoading();
+
+            try {
+                // Make API request
+                const response = await fetch(`${API_URL}?url=${encodeURIComponent(videoUrl)}&format=${format}&quality=${quality}`);
+                const data = await response.json();
+
+                hideLoading();
+
+                if (!response.ok || data.error) {
+                    showError(data.message || data.error || 'Failed to extract video information');
+                    return;
+                }
+
+                // Display results
+                displayResult(data);
+            } catch (error) {
+                hideLoading();
+                showError('Network error: ' + error.message);
+            }
+        }
+
+        function displayResult(data) {
+            document.getElementById('thumbnail').src = data.thumbnail;
+            document.getElementById('title').textContent = data.title;
+            document.getElementById('author').textContent = data.author;
+            document.getElementById('duration').textContent = formatDuration(data.lengthSeconds);
+            document.getElementById('videoId').textContent = data.videoId;
+            
+            document.getElementById('formatType').textContent = data.format.type.toUpperCase();
+            document.getElementById('formatQuality').textContent = data.format.quality;
+            document.getElementById('formatContainer').textContent = data.format.container;
+            document.getElementById('formatCodec').textContent = data.format.codec;
+            
+            document.getElementById('downloadBtn').href = data.downloadUrl;
+            
+            document.getElementById('result').classList.remove('hidden');
+        }
+
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+            return `${minutes}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function showLoading() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('extractBtn').disabled = true;
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('extractBtn').disabled = false;
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('error').classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('error').classList.add('hidden');
+        }
+
+        function hideResult() {
+            document.getElementById('result').classList.add('hidden');
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('videoUrl').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                extractVideo();
+            }
+        });
+    </script>
+
+</body>
+
+</html>

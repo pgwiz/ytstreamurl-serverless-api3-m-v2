@@ -1,0 +1,55 @@
+# Digital Ocean Functions ignore file
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build files
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+layout_guide.md
+proxy_setup.md
+
+# Other serverless configs
+vercel.json
+
+# Python files (not needed for DO function)
+*.py
+__pycache__/
+*.pyc
+
+# Test files
+test/
+*.test.js
+*.spec.js
+
+# Logs
+logs/
+*.log
+proxyLogs/
+
+# Cookies
+cookies.txt
+
+# Scripts
+setup_proxy.sh
+debug_ytsr.js

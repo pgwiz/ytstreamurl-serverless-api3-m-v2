@@ -73,11 +73,32 @@ Create a `.env` file or set in Vercel:
 
 ---
 
-## 📦 Deployment (Vercel)
+## 📦 Deployment
+
+### Vercel
 
 ```bash
 vercel --prod
 ```
+
+### Digital Ocean Functions
+
+For a lightweight YouTube-only downloader, see the **Digital Ocean Serverless Function** version:
+
+- **Location:** `packages/youtube/`
+- **Documentation:** [DO_FUNCTION_README.md](DO_FUNCTION_README.md)
+- **UI:** [youtube-downloader.html](youtube-downloader.html)
+
+Deploy to Digital Ocean:
+```bash
+doctl serverless deploy .
+```
+
+This serverless function provides:
+- ✅ YouTube video extraction (audio & video)
+- 🎯 Quality selection
+- 🚀 Auto-scaling serverless architecture
+- 📱 Mobile-friendly web interface
 
 ---
 

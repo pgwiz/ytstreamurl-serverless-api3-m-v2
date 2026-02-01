@@ -1,0 +1,14 @@
+name: youtube-extractor
+description: YouTube video extraction serverless function
+
+# Digital Ocean Functions configuration
+functions:
+  - name: youtube
+    runtime: nodejs:18
+    source: packages/youtube
+    environment:
+      NODE_ENV: production
+    limits:
+      timeout: 30000  # 30 seconds
+      memory: 256     # 256 MB
+    web: true        # Enable as web function (HTTP endpoint)
