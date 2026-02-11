@@ -39,7 +39,6 @@ def log(msg):
 
 def extract_youtube_stream(video_id):
     """Extract YouTube stream URL using yt-dlp"""
-    global ytdlp_logs
     log_entry = {
         "video_id": video_id,
         "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
