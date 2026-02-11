@@ -76,6 +76,8 @@ jobs:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: |
           echo "Deploying preview for PR #${{ github.event.number }}"
+          # Ensure build script is executable (prevents: ./build.sh: Permission denied)
+          chmod +x packages/default/serverless_handler/build.sh || true
           doctl serverless deploy . --include default --remote-build --verbose-build
 
       - name: Run smoke tests (preview)
@@ -186,6 +188,8 @@ jobs:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: |
           # Use remote build to install Python deps and to ensure build matches remote runtime
+          # Ensure build script is executable (prevents: ./build.sh: Permission denied)
+          chmod +x packages/default/serverless_handler/build.sh || true
           doctl serverless deploy . --include default --remote-build --verbose-build
 
       - name: Run smoke tests
