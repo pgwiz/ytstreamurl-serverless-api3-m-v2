@@ -85,7 +85,7 @@ jobs:
         env:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: |
-          doctl serverless deploy ./ --remote
+          doctl serverless deploy ./
 
       - name: Run smoke tests
         run: |
