@@ -20,44 +20,18 @@ def _log(msg):
     except Exception:
         pass
 
-# Ensure vendor dirs (installed during remote build) are available early in sys.path
+# Do not add vendor dirs to sys.path; rely on packages installed from requirements
+# and prefer subprocess 'yt-dlp' for stream extraction as in `simple_proxy.py`.
+
+# Keep a minimal check for /tmp/vendor presence for backward compatibility
 vendor_candidates = [
-    os.path.join(os.path.dirname(__file__), 'vendor'),
-    os.path.join(os.path.dirname(__file__), '..', 'vendor'),
-    os.path.join(os.path.dirname(__file__), '..', '..', 'vendor'),
-    os.path.join(os.getcwd(), 'vendor'),
     '/tmp/vendor',
-    '/tmp/vendor/lib/python3.11/site-packages',
-    '/tmp/.local/lib/python3.11/site-packages'
+    os.path.join(os.path.dirname(__file__), 'vendor')
 ]
 for vc in vendor_candidates:
     try:
         vc_abs = os.path.abspath(vc)
-        if os.path.isdir(vc_abs) and vc_abs not in sys.path:
-            sys.path.insert(0, vc_abs)
-            _log(f'Prepended vendor candidate to sys.path: {vc_abs}')
-            # If a vendored binary exists, try to ensure it's executable (useful after ZIP deployment)
-            try:
-                bin_candidates = [
-                    os.path.join(vc_abs, 'bin', 'yt-dlp'),
-                    os.path.join(vc_abs, 'bin', 'yt-dlp.exe'),
-                    os.path.join(vc_abs, 'yt-dlp'),
-                    os.path.join(vc_abs, 'yt-dlp.exe')
-                ]
-                for b in bin_candidates:
-                    try:
-                        if os.path.isfile(b):
-                            try:
-                                os.chmod(b, 0o755)
-                                _log(f'Set executable perm on vendored binary at startup: {b}')
-                            except Exception as ce:
-                                _log(f'Could not set chmod on vendored binary {b}: {ce}')
-                            break
-                    except Exception:
-                        continue
-            except Exception as e:
-                _log(f'Error ensuring vendored binary exec perm: {e}')
-            break
+        _log(f'Checked vendor candidate: {vc_abs} exists={os.path.isdir(vc_abs)}')
     except Exception as e:
         _log(f'Error checking vendor candidate {vc}: {e}')
 
