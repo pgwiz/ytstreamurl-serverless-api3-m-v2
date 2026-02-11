@@ -853,6 +853,47 @@ app.get('/stream/:videoId', async (req, res) => {
     const { videoId } = req.params;
 
     try {
+        // If DIGITALOCEAN_URL is set, use the serverless function as primary source
+        if (process.env.DIGITALOCEAN_URL) {
+            const doUrl = `${process.env.DIGITALOCEAN_URL}/default/serverless_handler/api/stream/${videoId}`;
+            console.log(`Fetching stream from DigitalOcean: ${doUrl}`);
+            
+            try {
+                const doResponse = await fetch(doUrl, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' },
+                    signal: AbortSignal.timeout(30000) // 30 second timeout
+                });
+                
+                if (doResponse.ok) {
+                    const data = await doResponse.json();
+                    // DO returns: { url, title, uploader, thumbnail, duration, ext, format_id, id, videoId }
+                    // url is already a full HTTPS URL from Google CDN, no stripping needed
+                    if (data.url) {
+                        console.log(`✅ Got stream from DO for ${videoId}`);
+                        return res.json({
+                            videoId,
+                            streamUrl: data.url,
+                            url: data.url, // Include both for compatibility
+                            title: data.title || 'Unknown',
+                            uploader: data.uploader || 'Unknown',
+                            duration: data.duration || 'Unknown',
+                            thumbnail: data.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                            ext: data.ext,
+                            format_id: data.format_id
+                        });
+                    }
+                    console.warn(`DO returned OK but no url: ${JSON.stringify(data)}`);
+                } else {
+                    console.warn(`DO returned ${doResponse.status} for ${videoId}, falling back to local`);
+                }
+            } catch (doError) {
+                console.warn(`DO fetch failed: ${doError.message}, falling back to local`);
+            }
+            // Fall through to local extraction if DO fails
+        }
+
+        // Fallback: use local extraction
         const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
         const result = await extractMediaInfo(youtubeUrl);
 
