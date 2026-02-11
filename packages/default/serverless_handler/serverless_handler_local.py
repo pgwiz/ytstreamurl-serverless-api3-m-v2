@@ -25,47 +25,52 @@ def _log(msg):
 
 
 
-# Ensure any vendored packages are on sys.path (installed during build into ./vendor)
+# We do not rely on vendored directories. Behavior:
+# - Prefer running the `yt-dlp` subprocess binary (installed by pip during remote build).
+# - If no binary is found, attempt `python -m yt_dlp` as a subprocess.
 import sys
-# Search multiple candidate vendor locations (support installs at repo root or package dir)
-candidates = [
-    os.path.join(os.path.dirname(__file__), 'vendor'),
-    os.path.join(os.path.dirname(__file__), '..', 'vendor'),
-    os.path.join(os.path.dirname(__file__), '..', '..', 'vendor'),
-    os.path.join(os.getcwd(), 'vendor'),
-    '/tmp/vendor',  # DigitalOcean remote-build may install --target ./vendor into /tmp
-    '/tmp/vendor/lib/python3.11/site-packages',
-    '/tmp/.local/lib/python3.11/site-packages',
-    '/tmp/.local/lib/python3.11/site-packages/yt_dlp',
-]
-for v in candidates:
-    try:
-        v_abs = os.path.abspath(v)
-        if os.path.isdir(v_abs):
-            sys.path.insert(0, v_abs)
-            _log(f'Added vendor dir to sys.path: {v_abs}')
-            break
-    except Exception as e:
-        _log(f'Error checking vendor candidate {v}: {e}')
 
 # We will attempt to import yt_dlp at runtime inside the extractor so that
 # imports succeed even if vendor was installed during the build step.
 
 # Check availability of yt-dlp binary in PATH (we can log this early)
 try:
-    import shutil
-    # Primary: check PATH
-    YT_DLP_BIN_PATH = shutil.which('yt-dlp')
-    if YT_DLP_BIN_PATH:
-        _log(f'yt-dlp binary found in PATH at: {YT_DLP_BIN_PATH}')
-    else:
-        # Common location when the package installs the console script during remote build
-        candidate = '/usr/local/bin/yt-dlp'
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            YT_DLP_BIN_PATH = candidate
-            _log(f'yt-dlp binary found at common path: {candidate}')
+            import shutil, sys
+            # Check PATH first
+            YT_DLP_BIN_PATH = shutil.which('yt-dlp')
+            if YT_DLP_BIN_PATH:
+                _log(f'yt-dlp binary found in PATH at: {YT_DLP_BIN_PATH}')
+            else:
+                # Check common locations where pip might have installed the console script
+                candidates = [
+                    '/usr/local/bin/yt-dlp',
+                    '/root/.local/bin/yt-dlp',
+                    '/home/function/.local/bin/yt-dlp',
+                    '/tmp/.local/bin/yt-dlp',
+                    '/usr/bin/yt-dlp'
+                ]
+                # Add Python's scripts directory (Windows or virtualenv)
+                try:
+                    scripts_dir = os.path.join(os.path.dirname(sys.executable), 'Scripts')
+                    candidates.append(os.path.join(scripts_dir, 'yt-dlp.exe'))
+                    # Add user scripts dir on Windows
+                    user_scripts = os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming', 'Python', f'Python{sys.version_info.major}{sys.version_info.minor}', 'Scripts', 'yt-dlp.exe')
+                    candidates.append(user_scripts)
+                except Exception:
+                    pass
+
+            try:
+                if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                    found = candidate
+                    break
+            except Exception:
+                continue
+        if found:
+            YT_DLP_BIN_PATH = found
+            _log(f'yt-dlp binary found at common path: {found}')
         else:
-            _log(f'yt-dlp binary not found in PATH or {candidate}; will attempt `python -m yt_dlp`')
+            YT_DLP_BIN_PATH = None
+            _log('yt-dlp binary not found in PATH or common locations; will attempt `python -m yt_dlp` subprocess')
 except Exception as e:
     YT_DLP_BIN_PATH = None
     _log(f'Error checking for yt-dlp binary: {e}')
@@ -98,31 +103,44 @@ def extract_youtube_stream(video_id):
         except Exception:
             pass
 
-        # Module-level variable to surface runtime import errors for diagnostics
-        global PY_IMPORT_ERROR
-        PY_IMPORT_ERROR = None
+        # Try subprocess first (preferred): use binary if available, otherwise `python -m yt_dlp`.
+        cmd = None
+        if YT_DLP_BIN_PATH:
+            cmd = [YT_DLP_BIN_PATH, youtube_url, "--no-cache-dir", "--no-check-certificate", "--dump-single-json", "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
+            _log(f'Using yt-dlp binary for extraction: {YT_DLP_BIN_PATH}')
+        else:
+            # Prefer python -m yt_dlp so PYTHONPATH and installed package is used
+            import sys as _sys
+            cmd = [_sys.executable, '-m', 'yt_dlp', youtube_url, "--no-cache-dir", "--no-check-certificate", "--dump-single-json", "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
+            _log(f'Using python -m yt_dlp subprocess: {_sys.executable} -m yt_dlp')
+
+        if os.path.exists(COOKIES_FILE):
+            cmd.extend(["--cookies", COOKIES_FILE])
+
         try:
-            import yt_dlp as _yt_dlp_module
-            _log('Using yt_dlp Python API')
-            ydl_opts = {
-                'format': 'best[ext=mp4][protocol^=http]/best[protocol^=http]',
-                'skip_download': True,
-                'quiet': True,
-                'nocheckcertificate': True,
-                'noplaylist': True,
-            }
-            if os.path.exists(COOKIES_FILE):
-                ydl_opts['cookiefile'] = COOKIES_FILE
-            with _yt_dlp_module.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(youtube_url, download=False)
-            data = info
-            stream_url = data.get('url') or (data.get('formats')[-1].get('url') if data.get('formats') else None)
-            if not stream_url:
-                _log('No URL found in yt_dlp API output')
-                return None
-        except Exception as api_exc:
-            PY_IMPORT_ERROR = str(api_exc)
-            _log(f'yt_dlp Python API failed at runtime: {PY_IMPORT_ERROR}; falling back to subprocess')
+            _log(f"Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT)
+        except FileNotFoundError as fnf:
+            _log(f"yt-dlp not found when attempting subprocess: {fnf}")
+            return None
+        except Exception as e:
+            _log(f"yt-dlp subprocess failed: {e}")
+            return None
+
+        if result.returncode != 0:
+            _log(f"yt-dlp error (code {result.returncode}): {(result.stderr or '')[:400]}")
+            return None
+
+        try:
+            data = json.loads(result.stdout)
+        except Exception as je:
+            _log(f'Failed to parse yt-dlp JSON output: {je}');
+            return None
+
+        stream_url = data.get('url')
+        if not stream_url:
+            _log('No URL found in yt-dlp output')
+            return None
 
         # Subprocess fallback only if binary exists
         if YT_DLP_BIN_PATH or shutil.which(YT_DLP_PATH):
