@@ -60,18 +60,10 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install DigitalOcean CLI (doctl)
-        run: |
-          cd ~
-          wget https://github.com/digitalocean/doctl/releases/download/v1.99.0/doctl-1.99.0-linux-amd64.tar.gz
-          tar xf ~/doctl-1.99.0-linux-amd64.tar.gz
-          sudo mv ~/doctl /usr/local/bin
-
-      - name: Authenticate with DigitalOcean
-        env:
-          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-        run: |
-          doctl auth init --access-token "$DIGITALOCEAN_ACCESS_TOKEN"
+      - name: Set up DigitalOcean CLI (doctl)
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
       - name: Install dependencies
         run: |
@@ -121,18 +113,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup DigitalOcean CLI
-        run: |
-          cd ~
-          wget https://github.com/digitalocean/doctl/releases/download/v1.99.0/doctl-1.99.0-linux-amd64.tar.gz
-          tar xf ~/doctl-1.99.0-linux-amd64.tar.gz
-          sudo mv ~/doctl /usr/local/bin
-
-      - name: Authenticate with DigitalOcean
-        env:
-          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-        run: |
-          doctl auth init --access-token "$DIGITALOCEAN_ACCESS_TOKEN"
+      - name: Set up DigitalOcean CLI
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
       - name: Rollback deployment
         run: |

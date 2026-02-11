@@ -10,8 +10,8 @@ echo "=================================================="
 if ! command -v doctl &> /dev/null; then
     echo "❌ doctl CLI not found. Installing doctl..."
     cd ~
-    wget https://github.com/digitalocean/doctl/releases/download/v1.99.0/doctl-1.99.0-linux-amd64.tar.gz
-    tar xf ~/doctl-1.99.0-linux-amd64.tar.gz
+    wget https://github.com/digitalocean/doctl/releases/download/v1.115.0/doctl-1.115.0-linux-amd64.tar.gz
+    tar xf ~/doctl-1.115.0-linux-amd64.tar.gz
     sudo mv ~/doctl /usr/local/bin
 else
     echo "✅ doctl CLI found"
