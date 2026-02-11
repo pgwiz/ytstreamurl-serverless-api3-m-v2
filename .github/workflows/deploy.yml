@@ -68,6 +68,9 @@ jobs:
       - name: Install DigitalOcean Serverless support
         run: doctl serverless install
 
+      - name: Connect to DigitalOcean Functions namespace
+        run: doctl serverless connect fn-bb05ab8d-3ad1-453e-a3ef-da38e7e0d078
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -123,6 +126,9 @@ jobs:
 
       - name: Install DigitalOcean Serverless support
         run: doctl serverless install
+
+      - name: Connect to DigitalOcean Functions namespace
+        run: doctl serverless connect fn-bb05ab8d-3ad1-453e-a3ef-da38e7e0d078
 
       - name: Rollback deployment
         run: |

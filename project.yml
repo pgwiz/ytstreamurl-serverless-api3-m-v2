@@ -1,14 +1,22 @@
-name: youtube-extractor
-description: YouTube video extraction serverless function
+name: youtube-stream-url
+description: YouTube stream URL extraction serverless function
 
-# Digital Ocean Functions configuration
-functions:
-  - name: youtube
-    runtime: nodejs:18
-    source: packages/youtube
+packages:
+  - name: default
     environment:
-      NODE_ENV: production
-    limits:
-      timeout: 30000  # 30 seconds
-      memory: 256     # 256 MB
-    web: true        # Enable as web function (HTTP endpoint)
+      PYTHONUNBUFFERED: "1"
+      YT_DLP_PATH: /usr/local/bin/yt-dlp
+      LOG_DIR: /tmp/proxyLogs
+      REQUEST_TIMEOUT: "45"
+      COOKIES_FILE: /tmp/cookies.txt
+    
+    functions:
+      - name: stream-extractor
+        main: serverless_handler:app
+        runtime: python:3.11
+        web: true
+        limits:
+          timeout: 60000      # 60 seconds
+          memory: 512         # 512 MB
+        environment:
+          FUNCTION_TYPE: stream-extractor
