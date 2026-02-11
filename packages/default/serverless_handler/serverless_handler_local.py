@@ -19,6 +19,28 @@ def _log(msg):
     except Exception:
         pass
 
+# Force-add likely vendor locations to sys.path immediately so imports use packages
+# installed during remote build into /tmp/vendor or /tmp/.local
+try:
+    import sys
+    vendor_force_paths = [
+        '/tmp/vendor',
+        '/tmp/vendor/lib',
+        '/tmp/vendor/lib/python3.11/site-packages',
+        '/tmp/.local/lib/python3.11/site-packages',
+        '/tmp/.local/lib/python3.11/site-packages/yt_dlp',
+    ]
+    for p in vendor_force_paths:
+        try:
+            if os.path.isdir(p) and p not in sys.path:
+                sys.path.insert(0, p)
+                print(f"[VENDOR] prepended to sys.path: {p}", flush=True)
+                break
+        except Exception as e:
+            print(f"[VENDOR] error checking {p}: {e}", flush=True)
+except Exception:
+    pass
+
 
 # Ensure any vendored packages are on sys.path (installed during build into ./vendor)
 import sys
@@ -28,7 +50,10 @@ candidates = [
     os.path.join(os.path.dirname(__file__), '..', 'vendor'),
     os.path.join(os.path.dirname(__file__), '..', '..', 'vendor'),
     os.path.join(os.getcwd(), 'vendor'),
-    '/tmp/vendor',  # DigitalOcean remote-build installs --target ./vendor into /tmp during build
+    '/tmp/vendor',  # DigitalOcean remote-build may install --target ./vendor into /tmp
+    '/tmp/vendor/lib/python3.11/site-packages',
+    '/tmp/.local/lib/python3.11/site-packages',
+    '/tmp/.local/lib/python3.11/site-packages/yt_dlp',
 ]
 for v in candidates:
     try:
@@ -46,11 +71,45 @@ for v in candidates:
 # Check availability of yt-dlp binary in PATH (we can log this early)
 try:
     import shutil
-    YT_DLP_BIN_PATH = shutil.which(YT_DLP_PATH)
-    if YT_DLP_BIN_PATH:
-        _log(f'yt-dlp binary found at: {YT_DLP_BIN_PATH}')
-    else:
-        _log(f'yt-dlp binary not found for YT_DLP_PATH="{YT_DLP_PATH}"')
+    YT_DLP_BIN_PATH = None
+    # Prefer a vendored binary if present (support dev Windows exe and production Linux binary)
+    vend_bin_candidates = [
+        os.path.join(os.path.dirname(__file__), 'vendor', 'bin', 'yt-dlp'),
+        os.path.join(os.path.dirname(__file__), 'vendor', 'bin', 'yt-dlp.exe'),
+        os.path.join(os.path.dirname(__file__), 'vendor', 'yt-dlp'),
+        os.path.join(os.path.dirname(__file__), 'vendor', 'yt-dlp.exe'),
+        '/tmp/vendor/bin/yt-dlp',
+        '/usr/local/bin/yt-dlp',
+    ]
+    try:
+        for vb in vend_bin_candidates:
+            try:
+                if os.path.isfile(vb):
+                    # Try to ensure executable bit (on Linux deployments)
+                    try:
+                        if not os.access(vb, os.X_OK):
+                            try:
+                                os.chmod(vb, 0o755)
+                                _log(f'Set executable perm on vendored binary: {vb}')
+                            except Exception as chmod_e:
+                                _log(f'Could not chmod vendored binary {vb}: {chmod_e}')
+                    except Exception:
+                        pass
+                    if os.access(vb, os.X_OK):
+                        YT_DLP_BIN_PATH = vb
+                        _log(f'Using vendored yt-dlp binary at: {YT_DLP_BIN_PATH}')
+                        break
+            except Exception:
+                continue
+        if not YT_DLP_BIN_PATH:
+            YT_DLP_BIN_PATH = shutil.which(YT_DLP_PATH)
+            if YT_DLP_BIN_PATH:
+                _log(f'yt-dlp binary found in PATH at: {YT_DLP_BIN_PATH}')
+            else:
+                _log(f'yt-dlp binary not found for YT_DLP_PATH="{YT_DLP_PATH}"')
+    except Exception as e:
+        YT_DLP_BIN_PATH = None
+        _log(f'Error checking for yt-dlp binary: {e}')
 except Exception:
     YT_DLP_BIN_PATH = None
     _log('Error checking for yt-dlp binary')
@@ -69,6 +128,20 @@ def extract_youtube_stream(video_id):
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         # Prefer using the yt_dlp Python API when available (no external binary dependency)
         # Attempt to import and use the yt_dlp Python API at runtime (vendor dir already added to sys.path)
+        # Ensure runtime vendor candidates are prepended to sys.path right now
+        try:
+            import sys
+            runtime_vendor_paths = ['/tmp/vendor', '/tmp/vendor/lib/python3.11/site-packages', '/tmp/.local/lib/python3.11/site-packages']
+            for rp in runtime_vendor_paths:
+                try:
+                    if os.path.isdir(rp) and rp not in sys.path:
+                        sys.path.insert(0, rp)
+                        _log(f'Inserted runtime vendor path into sys.path: {rp}')
+                except Exception as e:
+                    _log(f'Error inserting runtime vendor path {rp}: {e}')
+        except Exception:
+            pass
+
         # Module-level variable to surface runtime import errors for diagnostics
         global PY_IMPORT_ERROR
         PY_IMPORT_ERROR = None
@@ -110,21 +183,30 @@ def extract_youtube_stream(video_id):
             if os.path.exists(COOKIES_FILE):
                 cmd.extend(["--cookies", COOKIES_FILE])
 
-            _log(f"Running: {' '.join(cmd)}")
+            _log(f"Running subprocess fallback: {' '.join(cmd)}")
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT)
             except FileNotFoundError as fnf:
                 _log(f"yt-dlp binary not found when attempting subprocess: {fnf}")
                 return None
-
-            log_entry['stdout'] = result.stdout[:1000]
-            log_entry['stderr'] = result.stderr[:1000]
-
-            if result.returncode != 0:
-                _log(f"yt-dlp error (code {result.returncode}): {result.stderr[:200]}")
+            except Exception as e:
+                _log(f"yt-dlp subprocess failed: {e}")
                 return None
 
-            data = json.loads(result.stdout)
+            log_entry['stdout'] = (result.stdout or '')[:2000]
+            log_entry['stderr'] = (result.stderr or '')[:2000]
+            _log(f"yt-dlp subprocess rc={result.returncode}; stdout_len={len(result.stdout or '')}; stderr_len={len(result.stderr or '')}")
+
+            if result.returncode != 0:
+                _log(f"yt-dlp error (code {result.returncode}): {(result.stderr or '')[:400]}")
+                return None
+
+            try:
+                data = json.loads(result.stdout)
+            except Exception as je:
+                _log(f'Failed to parse yt-dlp JSON output: {je}');
+                return None
+
             stream_url = data.get('url')
             if not stream_url:
                 _log('No URL found in yt-dlp output')

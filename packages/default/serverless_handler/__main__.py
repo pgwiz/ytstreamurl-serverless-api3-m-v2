@@ -8,6 +8,7 @@ from datetime import datetime
 
 LOG_DIR = os.environ.get('LOG_DIR', '/tmp/proxyLogs')
 os.makedirs(LOG_DIR, exist_ok=True)
+import sys
 
 def _log(msg):
     ts = datetime.utcnow().isoformat() + 'Z'
@@ -18,6 +19,47 @@ def _log(msg):
             f.write(line + '\n')
     except Exception:
         pass
+
+# Ensure vendor dirs (installed during remote build) are available early in sys.path
+vendor_candidates = [
+    os.path.join(os.path.dirname(__file__), 'vendor'),
+    os.path.join(os.path.dirname(__file__), '..', 'vendor'),
+    os.path.join(os.path.dirname(__file__), '..', '..', 'vendor'),
+    os.path.join(os.getcwd(), 'vendor'),
+    '/tmp/vendor',
+    '/tmp/vendor/lib/python3.11/site-packages',
+    '/tmp/.local/lib/python3.11/site-packages'
+]
+for vc in vendor_candidates:
+    try:
+        vc_abs = os.path.abspath(vc)
+        if os.path.isdir(vc_abs) and vc_abs not in sys.path:
+            sys.path.insert(0, vc_abs)
+            _log(f'Prepended vendor candidate to sys.path: {vc_abs}')
+            # If a vendored binary exists, try to ensure it's executable (useful after ZIP deployment)
+            try:
+                bin_candidates = [
+                    os.path.join(vc_abs, 'bin', 'yt-dlp'),
+                    os.path.join(vc_abs, 'bin', 'yt-dlp.exe'),
+                    os.path.join(vc_abs, 'yt-dlp'),
+                    os.path.join(vc_abs, 'yt-dlp.exe')
+                ]
+                for b in bin_candidates:
+                    try:
+                        if os.path.isfile(b):
+                            try:
+                                os.chmod(b, 0o755)
+                                _log(f'Set executable perm on vendored binary at startup: {b}')
+                            except Exception as ce:
+                                _log(f'Could not set chmod on vendored binary {b}: {ce}')
+                            break
+                    except Exception:
+                        continue
+            except Exception as e:
+                _log(f'Error ensuring vendored binary exec perm: {e}')
+            break
+    except Exception as e:
+        _log(f'Error checking vendor candidate {vc}: {e}')
 
 def main(event=None, context=None):
     """Entry point for DigitalOcean Functions (event, context)
@@ -80,7 +122,7 @@ def main(event=None, context=None):
             return {"body": {"error": "Not found"}, "statusCode": 404}
 
     # Debug endpoint to inspect Python sys.path and vendor locations
-    if path and path.startswith('/debug/sys'):
+    if path and ('/debug/sys' in path):
         try:
             import sys
             import shutil
@@ -98,11 +140,27 @@ def main(event=None, context=None):
                 except Exception as e:
                     vendor_info[v] = f'error: {e}'
             python_check = {
-                'sys_path': sys.path[:10],
+                'sys_path': sys.path[:20],
                 'yt_dlp_importable': None,
                 'yt_dlp_location': None,
-                'yt_dlp_bin': shutil.which(os.environ.get('YT_DLP_PATH', 'yt-dlp'))
+                'yt_dlp_bin': shutil.which(os.environ.get('YT_DLP_PATH', 'yt-dlp')),
+                'site_packages_candidates': []
             }
+            # Check common site-packages locations under /tmp that pip might have used
+            sp_candidates = [
+                '/tmp/vendor',
+                '/tmp/vendor/lib',
+                '/tmp/vendor/lib/python3.11/site-packages',
+                '/tmp/.local/lib/python3.11/site-packages',
+                '/tmp/.local/lib/python3.11/site-packages/yt_dlp',
+            ]
+            for sc in sp_candidates:
+                try:
+                    python_check['site_packages_candidates'].append({sc: os.path.isdir(sc)})
+                except Exception as e:
+                    python_check['site_packages_candidates'].append({sc: f'error: {e}'})
+
+            # Try import and also enumerate vendor directories if present
             try:
                 import yt_dlp as _ym
                 python_check['yt_dlp_importable'] = True
@@ -110,9 +168,33 @@ def main(event=None, context=None):
             except Exception as ie:
                 python_check['yt_dlp_importable'] = False
                 python_check['yt_dlp_import_error'] = str(ie)
+                # Enumerate vendor dirs to help debugging
+                vendor_listing = {}
+                for k, present in vendor_info.items():
+                    try:
+                        if present:
+                            vendor_listing[k] = os.listdir(k)
+                        else:
+                            vendor_listing[k] = 'not present'
+                    except Exception as e:
+                        vendor_listing[k] = f'error listing: {e}'
+                python_check['vendor_listing_sample'] = vendor_listing
+
             return {"body": {"vendor_candidates": vendor_info, "python_check": python_check}, "statusCode": 200}
         except Exception as e:
             _log(f'debug error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
+
+    # Lightweight python import check endpoint: /debug/py
+    if path and ('/debug/py' in path):
+        try:
+            try:
+                import yt_dlp as _ym
+                return {"body": {"yt_dlp": True, "location": getattr(_ym, '__file__', None)}, "statusCode": 200}
+            except Exception as ie:
+                return {"body": {"yt_dlp": False, "error": str(ie)}, "statusCode": 200}
+        except Exception as e:
+            _log(f'debug/py error: {e}')
             return {"body": {"error": str(e)}, "statusCode": 500}
 
     # API: /api/stream/{videoId}
