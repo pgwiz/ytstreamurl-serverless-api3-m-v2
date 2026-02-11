@@ -43,6 +43,44 @@ def main(event=None, context=None):
         _log('returning hello')
         return {"body": {"message": "hello from serverless_handler"}, "statusCode": 200}
 
+    # API: /api/stream/{videoId}
+    if path and path.startswith('/api/stream/'):
+        video_id = path.split('/')[-1]
+        _log(f'api/stream invoked for {video_id}')
+        try:
+            # Try importing the extractor from the local module
+            try:
+                from serverless_handler_local import extract_youtube_stream
+            except Exception:
+                # Fallback: relative import
+                from .. import serverless_handler_local as shl
+                extract_youtube_stream = shl.extract_youtube_stream
+
+            result = extract_youtube_stream(video_id)
+            if result:
+                return {"body": result, "statusCode": 200}
+            else:
+                return {"body": {"error": "Failed to extract stream"}, "statusCode": 500}
+        except Exception as e:
+            _log(f'extraction error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
+
+    # Direct ytdlp endpoint: /ytdlp?id={videoId}
+    if path == '/ytdlp':
+        q = event.get('query', {}) if event else {}
+        vid = q.get('id') if isinstance(q, dict) else None
+        if not vid:
+            return {"body": {"error": "Missing 'id' parameter"}, "statusCode": 400}
+        try:
+            from serverless_handler_local import extract_youtube_stream
+            result = extract_youtube_stream(vid)
+            if result:
+                return {"body": result, "statusCode": 200}
+            return {"body": {"error": "Failed to extract stream"}, "statusCode": 500}
+        except Exception as e:
+            _log(f'ytdlp error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
+
     # Unknown path
     _log(f'unknown path: {path}')
     return {"body": {"error": "Not found", "path": path}, "statusCode": 404}
