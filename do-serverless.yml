@@ -1,0 +1,50 @@
+---
+# DigitalOcean Serverless Function - Python Configuration
+# Generated for YouTube Stream URL Extraction Service
+
+name: youtube-stream-url-serverless
+description: YouTube stream URL extraction and proxy service
+runtime: python3.11
+
+# Main entry point for the serverless function
+main: serverless_handler.py:app
+
+# Environment variables
+environment:
+  YT_DLP_PATH: /usr/local/bin/yt-dlp
+  LOG_DIR: /tmp/proxyLogs
+  REQUEST_TIMEOUT: "45"
+  COOKIES_FILE: /tmp/cookies.txt
+  PYTHONUNBUFFERED: "1"
+
+# Function configuration
+limits:
+  timeout: 60000  # 60 seconds
+  memory: 512     # 512 MB
+
+# Enable as web function (HTTP endpoint)
+web: true
+
+# CORS configuration
+cors:
+  enabled: true
+  allow_origins:
+    - "*"
+  allow_methods:
+    - GET
+    - POST
+    - OPTIONS
+  allow_headers:
+    - Content-Type
+    - Authorization
+
+# Repository information
+repository:
+  url: https://github.com/${{ github.repository }}
+  branch: main
+
+# Package dependencies
+packages:
+  - flask==3.0.0
+  - requests==2.31.0
+  - yt-dlp==2024.1.16

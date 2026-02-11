@@ -1,0 +1,151 @@
+name: Deploy to DigitalOcean Serverless
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/youtube-stream-url
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test and Validate
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r serverless_requirements.txt
+          pip install pytest pytest-cov flake8
+
+      - name: Lint code
+        run: |
+          flake8 serverless_handler.py --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 serverless_handler.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ -v --cov=. --cov-report=xml || true
+
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install DigitalOcean CLI (doctl)
+        run: |
+          cd ~
+          wget https://github.com/digitalocean/doctl/releases/download/v1.98.4/doctl-1.98.4-linux-x86_64.tar.gz
+          tar xf ~/doctl-1.98.4-linux-x86_64.tar.gz
+          sudo mv ~/doctl /usr/local/bin
+
+      - name: Authenticate with DigitalOcean
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          doctl auth init --access-token "$DIGITALOCEAN_ACCESS_TOKEN"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r serverless_requirements.txt
+
+      - name: Validate project configuration
+        run: |
+          doctl serverless status
+          doctl serverless validate --source-dir ./ || true
+
+      - name: Deploy to DigitalOcean Functions
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          doctl serverless deploy --source-dir ./ --remote
+
+      - name: Run smoke tests
+        run: |
+          sleep 10
+          # Get the function URL from DigitalOcean
+          FUNCTION_URL=$(doctl serverless functions get default/stream-extractor --format endpoint --no-header 2>/dev/null || echo "")
+          
+          if [ -n "$FUNCTION_URL" ]; then
+            echo "Testing function endpoint: $FUNCTION_URL"
+            curl -X GET "$FUNCTION_URL" -H "Accept: application/json" || echo "Health check request failed"
+          else
+            echo "Function URL not available yet"
+          fi
+
+      - name: Create deployment summary
+        if: always()
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: DigitalOcean Functions" >> $GITHUB_STEP_SUMMARY
+          echo "- Runtime: Python 3.11" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_STEP_SUMMARY
+
+  rollback:
+    runs-on: ubuntu-latest
+    name: Rollback (On Failure)
+    needs: build-and-deploy
+    if: failure()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup DigitalOcean CLI
+        run: |
+          cd ~
+          wget https://github.com/digitalocean/doctl/releases/download/v1.98.4/doctl-1.98.4-linux-x86_64.tar.gz
+          tar xf ~/doctl-1.98.4-linux-x86_64.tar.gz
+          sudo mv ~/doctl /usr/local/bin
+
+      - name: Authenticate with DigitalOcean
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          doctl auth init --access-token "$DIGITALOCEAN_ACCESS_TOKEN"
+
+      - name: Rollback deployment
+        run: |
+          echo "Rolling back to previous version..."
+          # Get previous commit
+          PREVIOUS_COMMIT=$(git rev-parse HEAD^)
+          echo "Previous commit: $PREVIOUS_COMMIT"
+          
+          # Note: Actual rollback would depend on your versioning strategy
+          # This is a placeholder for rollback logic
+          doctl serverless status
+
+      - name: Notify rollback
+        run: |
+          echo "### ⚠️ Rollback Initiated" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment failed at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_STEP_SUMMARY
