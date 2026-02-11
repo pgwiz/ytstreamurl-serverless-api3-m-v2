@@ -79,7 +79,7 @@ jobs:
       - name: Validate project configuration
         run: |
           doctl serverless status
-          doctl serverless validate ./ || true
+          doctl serverless get-metadata ./ || true
 
       - name: Deploy to DigitalOcean Functions
         env:

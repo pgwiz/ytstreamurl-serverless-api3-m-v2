@@ -1,17 +1,7 @@
-name: youtube-stream-url
-description: YouTube stream URL extraction serverless function
-
 packages:
   - name: default
-    environment:
-      PYTHONUNBUFFERED: "1"
-      YT_DLP_PATH: /usr/local/bin/yt-dlp
-      LOG_DIR: /tmp/proxyLogs
-      REQUEST_TIMEOUT: "45"
-      COOKIES_FILE: /tmp/cookies.txt
-    
     functions:
-      - name: stream-extractor
+      - name: serverless_handler
         main: serverless_handler:app
         runtime: python:3.11
         web: true
@@ -20,3 +10,18 @@ packages:
           memory: 512         # 512 MB
         environment:
           FUNCTION_TYPE: stream-extractor
+          PYTHONUNBUFFERED: "1"
+          YT_DLP_PATH: /usr/local/bin/yt-dlp
+          LOG_DIR: /tmp/proxyLogs
+          REQUEST_TIMEOUT: "45"
+          COOKIES_FILE: /tmp/cookies.txt
+
+      - name: hello
+        main: hello:main
+        runtime: python:3.11
+        web: true
+        limits:
+          timeout: 10000
+          memory: 128
+        environment:
+          DESCRIPTION: "Simple health/test function"

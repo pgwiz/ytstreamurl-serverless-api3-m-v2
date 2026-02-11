@@ -32,10 +32,12 @@ proxy_setup.md
 # Other serverless configs
 vercel.json
 
-# Python files (not needed for DO function)
-*.py
-__pycache__/
-*.pyc
+# Node package artifacts to ignore (don’t treat as functions)
+packages/youtube/package.json
+packages/youtube/package-lock.json
+packages/youtube/node_modules/
+
+# (Python files are required for this project; do not exclude them)
 
 # Test files
 test/

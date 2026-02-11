@@ -21,6 +21,19 @@ REQUEST_TIMEOUT = int(os.environ.get('REQUEST_TIMEOUT', '45'))
 
 os.makedirs(LOG_DIR, exist_ok=True)
 
+# Startup instrumentation: print environment to help debug serverless initialization
+try:
+    startup_info = {
+        "COOKIES_FILE": COOKIES_FILE,
+        "YT_DLP_PATH": YT_DLP_PATH,
+        "LOG_DIR": LOG_DIR,
+        "REQUEST_TIMEOUT": REQUEST_TIMEOUT
+    }
+    print("MODULE INIT:", startup_info, flush=True)
+except Exception as _e:
+    print("MODULE INIT ERROR:", str(_e), flush=True)
+    raise
+
 # Store recent yt-dlp execution logs (last 10)
 ytdlp_logs = []
 
