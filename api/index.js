@@ -798,6 +798,9 @@ app.get('/playground', (req, res) => {
     }
 });
 
+// Serve playground script via two paths for compatibility:
+//  - /playground.js (existing route)
+//  - /static/playground.js (used by DO and static HTML files)
 app.get('/playground.js', (req, res) => {
     if (process.env.PLAYGROUND !== 'true') {
         return res.status(404).send('Cannot GET /playground.js');
@@ -808,6 +811,23 @@ app.get('/playground.js', (req, res) => {
     } else {
         res.status(404).send('Playground script not found');
     }
+});
+
+app.get('/static/:file', (req, res) => {
+    // Serve static assets used by playground and other pages
+    const fname = req.params.file;
+    // Check both root and packages paths
+    const candidates = [
+        path.join(__dirname, '..', fname),
+        path.join(__dirname, '..', 'static', fname),
+        path.join(__dirname, '..', 'packages', 'default', 'serverless_handler', 'static', fname)
+    ];
+    for (const p of candidates) {
+        if (fs.existsSync(p)) {
+            return res.sendFile(p);
+        }
+    }
+    return res.status(404).send('Not found');
 });
 
 // Global Middleware to disable caching for all API responses
