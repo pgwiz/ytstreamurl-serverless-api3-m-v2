@@ -79,13 +79,13 @@ jobs:
       - name: Validate project configuration
         run: |
           doctl serverless status
-          doctl serverless validate --source-dir ./ || true
+          doctl serverless validate ./ || true
 
       - name: Deploy to DigitalOcean Functions
         env:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: |
-          doctl serverless deploy --source-dir ./ --remote
+          doctl serverless deploy ./ --remote
 
       - name: Run smoke tests
         run: |
