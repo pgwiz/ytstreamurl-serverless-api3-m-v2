@@ -186,7 +186,17 @@ def main(event=None, context=None):
                     stderr = proc.stderr or ''
                     stdout = proc.stdout or ''
                     _log(f"Diagnostic rc={proc.returncode} stderr={(stderr[:300]).replace(chr(10),' ')}")
-                    return {"body": {"error": "Failed to extract stream", "diagnostic": {"rc": proc.returncode, "stderr": stderr[:2000], "stdout_sample": stdout[:2000]}}, "statusCode": 500}
+                    # Include any Python import error in the diagnostic if present
+                    py_import_err = None
+                    try:
+                        from serverless_handler_local import __dict__ as _m
+                        py_import_err = _m.get('py_exc')
+                    except Exception:
+                        py_import_err = None
+                    diagnostic = {"rc": proc.returncode, "stderr": stderr[:2000], "stdout_sample": stdout[:2000]}
+                    if py_import_err:
+                        diagnostic['python_import_error'] = py_import_err
+                    return {"body": {"error": "Failed to extract stream", "diagnostic": diagnostic}, "statusCode": 500}
                 except Exception as de:
                     _log(f'Diagnostic run failed: {de}')
                     return {"body": {"error": "Failed to extract stream", "diagnostic_error": str(de)}, "statusCode": 500}
