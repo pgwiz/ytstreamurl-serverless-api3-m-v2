@@ -77,7 +77,9 @@ When you call `/stream/{videoId}` on Vercel:
 | `PROXY` | Vercel env (optional) | Legacy proxy URL (overridden by DIGITALOCEAN_URL for /stream). **Optional — not required for deployment.** |
 | `DIGITALOCEAN_URL` | Vercel env | DigitalOcean serverless function base URL |
 
-> Note: Spotify credentials and `PROXY` are optional. If you don't set them now, Vercel deployments will succeed and Spotify-related features are simply marked as "not configured"; the presence of `DIGITALOCEAN_URL` is sufficient for the /stream integration.
+> Note: Spotify credentials and `PROXY` are optional. If you don't set them now, Vercel deployments will succeed and Spotify-related features are simply marked as "not configured".
+
+> **Important:** Do not put secret values directly into `vercel.json`. Set environment variables and secrets in the Vercel dashboard or use the `vercel env` CLI (e.g., `vercel env add DIGITALOCEAN_URL`). This avoids deployment failures when a referenced secret does not exist.
 
 ## Benefits
 

@@ -1,8 +1,6 @@
 {
     "version": 2,
-    "env": {
-        "DIGITALOCEAN_URL": "@digitalocean_url"
-    },
+    "env": {},
     "builds": [
         {
             "src": "api/index.js",
