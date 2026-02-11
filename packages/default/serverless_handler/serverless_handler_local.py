@@ -185,7 +185,17 @@ def extract_youtube_stream(video_id):
 
             _log(f"Running subprocess fallback: {' '.join(cmd)}")
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT)
+                # Ensure subprocess Python can import vendored packages by setting PYTHONPATH
+                env = os.environ.copy()
+                vendor_py_paths = [
+                    os.path.join(os.path.dirname(__file__), 'vendor'),
+                    '/tmp/vendor'
+                ]
+                existing_pp = env.get('PYTHONPATH', '')
+                # Prepend vendor paths
+                vendor_pp = os.pathsep.join([p for p in vendor_py_paths if p])
+                env['PYTHONPATH'] = vendor_pp + (os.pathsep + existing_pp if existing_pp else '')
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT, env=env)
             except FileNotFoundError as fnf:
                 _log(f"yt-dlp binary not found when attempting subprocess: {fnf}")
                 return None

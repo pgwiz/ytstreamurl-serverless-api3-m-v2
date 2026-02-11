@@ -14,15 +14,15 @@
         "digest": "58bff6ef3727bf28a172f35139dabbb7702133bee7ae35c12dc0b7ed36dcf1fb"
       },
       "serverless_handler": {
-        "digest": "379eb1554361d033241fe5ddb5897360afb12f2fc9269004c21bcec45d112732",
-        "version": "0.0.42"
+        "digest": "e710d4926379d3d8d7ed9006840890cef755cf8b94c01c45c90b9e30739da767",
+        "version": "0.0.43"
       },
       "hello": {
-        "version": "0.0.54",
+        "version": "0.0.55",
         "digest": "4a0090d42c1d628318dbf4441a8aa163c85967efc414ef84031ddc95f8f1fb37"
       },
       "serverless_handler_local": {
-        "version": "0.0.50",
+        "version": "0.0.51",
         "digest": "ce66faa7410dc338174818c25430ed32ca955a98b7ba798287171b95bb76628e"
       }
     }
