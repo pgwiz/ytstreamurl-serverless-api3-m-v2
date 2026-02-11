@@ -44,6 +44,106 @@ jobs:
         run: |
           pytest tests/ -v --cov=. --cov-report=xml || true
 
+  preview-smoke-test:
+    runs-on: ubuntu-latest
+    name: Preview Deploy & Smoke Test (PR)
+    needs: test
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up DigitalOcean CLI (doctl)
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install DigitalOcean Serverless support
+        run: doctl serverless install
+
+      - name: Connect to DigitalOcean Functions namespace
+        run: doctl serverless connect fn-bb05ab8d-3ad1-453e-a3ef-da38e7e0d078
+
+      - name: Deploy preview to DigitalOcean Functions
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          echo "Deploying preview for PR #${{ github.event.number }}"
+          doctl serverless deploy . --include default --remote-build --verbose-build
+
+      - name: Run smoke tests (preview)
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          set -e
+          echo "Waiting for deployed function endpoint..."
+          ENDPOINT=""
+          for i in $(seq 1 12); do
+            ENDPOINT=$(doctl serverless functions get serverless_handler --url 2>/dev/null || true)
+            if [ -n "$ENDPOINT" ]; then
+              echo "Found endpoint: $ENDPOINT"
+              break
+            fi
+            echo "Endpoint not ready yet (attempt $i), retrying in 5s..."
+            sleep 5
+          done
+          if [ -z "$ENDPOINT" ]; then
+            echo "ERROR: function endpoint not found"
+            doctl serverless activations list serverless_handler --limit 5 --format ActivationID,Start,Function --output json || true
+            exit 1
+          fi
+
+          URL="$ENDPOINT/api/stream/dQw4w9WgXcQ"
+          echo "Testing $URL"
+
+          HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" -H "Accept: application/json" "$URL" || true)
+          echo "HTTP code: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Smoke test failed. Response:" 
+            cat response.json || true
+            ACT=$(doctl serverless activations list serverless_handler --limit 1 --format ActivationID --output json | python -c "import sys, json; a=json.load(sys.stdin); print(a[0]['activationId'] if a else '')") || true
+            if [ -n "$ACT" ]; then
+              echo "Fetching activation logs for $ACT"
+              doctl serverless activations logs $ACT || true
+            fi
+            exit 1
+          fi
+
+          # Validate response.json contains a url; use jq when available for cleaner parsing
+          if command -v jq >/dev/null 2>&1; then
+            jq -e '.url' response.json >/dev/null || (echo "Missing url in response:" && cat response.json && exit 2)
+          else
+            python -c "import sys,json; obj=json.load(open('response.json'));\nif not obj.get('url'): print('Missing url in response:', obj); sys.exit(2);\nprint('Preview smoke test passed: url found')"
+          fi
+
+      - name: Collect debug artifacts
+        if: failure()
+        run: |
+          echo "Collecting artifacts..."
+          ACT=$(doctl serverless activations list serverless_handler --limit 1 --format ActivationID --output json | python -c "import sys,json; a=json.load(sys.stdin); print(a[0]['activationId'] if a else '')") || true
+          if [ -n "$ACT" ]; then
+            doctl serverless activations logs $ACT > activation_logs.txt || true
+          else
+            echo "No activation id found" > activation_logs.txt
+          fi
+          ls -lah || true
+
+      - name: Upload artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-artifacts
+          path: |
+            response.json
+            activation_logs.txt
+
   build-and-deploy:
     runs-on: ubuntu-latest
     name: Build and Deploy
@@ -126,14 +226,33 @@ jobs:
             exit 1
           fi
 
-          python - <<'PY'
-import sys, json
-obj=json.load(open('response.json'))
-if not obj.get('url'):
-    print('Missing url in response:', obj)
-    sys.exit(2)
-print('Smoke test passed: url found')
-PY
+          # Validate response.json contains a url; use jq when available for cleaner parsing
+          if command -v jq >/dev/null 2>&1; then
+            jq -e '.url' response.json >/dev/null || (echo "Missing url in response:" && cat response.json && exit 2)
+          else
+            python -c "import sys,json; obj=json.load(open('response.json'));\nif not obj.get('url'): print('Missing url in response:', obj); sys.exit(2);\nprint('Smoke test passed: url found')"
+          fi
+
+      - name: Collect debug artifacts
+        if: failure()
+        run: |
+          echo "Collecting artifacts..."
+          ACT=$(doctl serverless activations list serverless_handler --limit 1 --format ActivationID --output json | python -c "import sys,json; a=json.load(sys.stdin); print(a[0]['activationId'] if a else '')") || true
+          if [ -n "$ACT" ]; then
+            doctl serverless activations logs $ACT > activation_logs.txt || true
+          else
+            echo "No activation id found" > activation_logs.txt
+          fi
+          ls -lah || true
+
+      - name: Upload artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-artifacts
+          path: |
+            response.json
+            activation_logs.txt
 
       - name: Create deployment summary
         if: always()
