@@ -56,10 +56,13 @@ def main(event=None, context=None):
             _log(f'playground serve error: {e}')
             return {"body": {"error": "Could not serve playground"}, "statusCode": 500}
 
-    if path and path.startswith('/static/'):
+    if path and ('/static/' in path):
         try:
+            # Normalize: find the first occurrence of /static/ to support prefixes like
+            # /default/serverless_handler/static/playground.js
+            idx = path.find('/static/')
+            rel = path[idx + len('/static/'):]
             static_dir = os.path.join(os.path.dirname(__file__), 'static')
-            rel = path[len('/static/'):]
             # Prevent path traversal
             target = os.path.abspath(os.path.join(static_dir, rel))
             if not target.startswith(os.path.abspath(static_dir)) or not os.path.exists(target):
