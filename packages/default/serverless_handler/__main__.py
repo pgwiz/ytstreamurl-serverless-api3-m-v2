@@ -167,7 +167,29 @@ def main(event=None, context=None):
             if result:
                 return {"body": result, "statusCode": 200}
             else:
-                return {"body": {"error": "Failed to extract stream"}, "statusCode": 500}
+                # Diagnostic step: attempt a CLI run with verbose output to capture errors
+                try:
+                    youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+                    diag_cmd = [
+                        os.environ.get('YT_DLP_PATH', 'yt-dlp'),
+                        youtube_url,
+                        "--no-cache-dir",
+                        "--no-check-certificate",
+                        "--dump-single-json",
+                        "--no-playlist",
+                        "-f",
+                        "best[ext=mp4]/best",
+                        "-v"
+                    ]
+                    _log(f"Running diagnostic command: {' '.join(diag_cmd)}")
+                    proc = subprocess.run(diag_cmd, capture_output=True, text=True, timeout=int(os.environ.get('REQUEST_TIMEOUT', '45')))
+                    stderr = proc.stderr or ''
+                    stdout = proc.stdout or ''
+                    _log(f"Diagnostic rc={proc.returncode} stderr={(stderr[:300]).replace(chr(10),' ')}")
+                    return {"body": {"error": "Failed to extract stream", "diagnostic": {"rc": proc.returncode, "stderr": stderr[:2000], "stdout_sample": stdout[:2000]}}, "statusCode": 500}
+                except Exception as de:
+                    _log(f'Diagnostic run failed: {de}')
+                    return {"body": {"error": "Failed to extract stream", "diagnostic_error": str(de)}, "statusCode": 500}
         except Exception as e:
             _log(f'extraction error: {e}')
             return {"body": {"error": str(e)}, "statusCode": 500}
