@@ -176,10 +176,12 @@ def extract_youtube_stream(video_id):
             cmd = [_sys.executable, '-m', 'yt_dlp', youtube_url,
                    "--no-cache-dir", "--no-check-certificate", "--dump-single-json",
                    "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
-            # Fallback: if python -m yt_dlp is not applicable, use vendored binary
-            if not shutil.which('yt_dlp') and YT_DLP_BIN_PATH:
+            # If Python import failed earlier, fall back to a vendored binary; otherwise prefer `python -m yt_dlp`
+            if (globals().get('PY_IMPORT_ERROR') is not None) and YT_DLP_BIN_PATH:
                 # use vendored binary directly
                 cmd = [YT_DLP_BIN_PATH, youtube_url, "--no-cache-dir", "--no-check-certificate", "--dump-single-json", "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
+            else:
+                _log('Using subprocess via python -m yt_dlp (preferred)')
             if os.path.exists(COOKIES_FILE):
                 cmd.extend(["--cookies", COOKIES_FILE])
 
