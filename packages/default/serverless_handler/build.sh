@@ -2,13 +2,15 @@
 set -e
 
 # Build script for DigitalOcean Functions (Python 3.11)
-# Creates virtualenv and installs requirements into runtime-specific location.
+# Create a virtual environment and install requirements into it so they are packaged
 
-# Create virtualenv without pip to keep small
-virtualenv --without-pip virtualenv
-
-# Install requirements into the correct site-packages for Python 3.11
-pip install -r requirements.txt --target virtualenv/lib/python3.11/site-packages
+PY="$(which python || which python3 || echo python)"
+$PY -m pip install --upgrade pip
+$PY -m venv virtualenv
+# Activate venv and install into site-packages
+. virtualenv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt --no-cache-dir
 
 # Ensure files are present for deployment
 echo "Build complete"
