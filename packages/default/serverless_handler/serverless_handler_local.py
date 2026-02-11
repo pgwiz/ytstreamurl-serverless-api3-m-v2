@@ -68,7 +68,9 @@ def extract_youtube_stream(video_id):
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         # Prefer using the yt_dlp Python API when available (no external binary dependency)
         # Attempt to import and use the yt_dlp Python API at runtime (vendor dir already added to sys.path)
-        py_exc = None
+        # Module-level variable to surface runtime import errors for diagnostics
+        global PY_IMPORT_ERROR
+        PY_IMPORT_ERROR = None
         try:
             import yt_dlp as _yt_dlp_module
             _log('Using yt_dlp Python API')
@@ -89,8 +91,8 @@ def extract_youtube_stream(video_id):
                 _log('No URL found in yt_dlp API output')
                 return None
         except Exception as api_exc:
-            py_exc = str(api_exc)
-            _log(f'yt_dlp Python API failed at runtime: {py_exc}; falling back to subprocess')
+            PY_IMPORT_ERROR = str(api_exc)
+            _log(f'yt_dlp Python API failed at runtime: {PY_IMPORT_ERROR}; falling back to subprocess')
 
         # Subprocess fallback only if binary exists
         if YT_DLP_BIN_PATH or shutil.which(YT_DLP_PATH):

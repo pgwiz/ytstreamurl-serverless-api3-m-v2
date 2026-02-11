@@ -189,10 +189,10 @@ def main(event=None, context=None):
                     # Include any Python import error in the diagnostic if present
                     py_import_err = None
                     try:
-                        from serverless_handler_local import __dict__ as _m
-                        py_import_err = _m.get('py_exc')
-                    except Exception:
-                        py_import_err = None
+                        import serverless_handler_local as _shl
+                        py_import_err = getattr(_shl, 'PY_IMPORT_ERROR', None)
+                    except Exception as e:
+                        py_import_err = f'import error reading PY_IMPORT_ERROR: {e}'
                     diagnostic = {"rc": proc.returncode, "stderr": stderr[:2000], "stdout_sample": stdout[:2000]}
                     if py_import_err:
                         diagnostic['python_import_error'] = py_import_err
