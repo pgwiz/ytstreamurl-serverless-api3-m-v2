@@ -49,12 +49,25 @@ def main(event=None, context=None):
         _log(f'api/stream invoked for {video_id}')
         try:
             # Try importing the extractor from the local module
+            extract_youtube_stream = None
+            # Try direct import first
             try:
-                from serverless_handler_local import extract_youtube_stream
+                from serverless_handler_local import extract_youtube_stream as _ext
+                extract_youtube_stream = _ext
             except Exception:
-                # Fallback: relative import
-                from .. import serverless_handler_local as shl
-                extract_youtube_stream = shl.extract_youtube_stream
+                # Fallback: load by file path using importlib
+                try:
+                    import importlib.util
+                    base = os.path.dirname(__file__)
+                    path = os.path.join(base, '..', 'serverless_handler_local.py')
+                    path = os.path.abspath(path)
+                    spec = importlib.util.spec_from_file_location('sh_local', path)
+                    shl = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(shl)
+                    extract_youtube_stream = shl.extract_youtube_stream
+                except Exception as e:
+                    _log(f'Import error: {e}')
+                    raise
 
             result = extract_youtube_stream(video_id)
             if result:
