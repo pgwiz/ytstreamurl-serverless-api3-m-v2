@@ -65,6 +65,9 @@ jobs:
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
+      - name: Install DigitalOcean Serverless support
+        run: doctl serverless install
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -117,6 +120,9 @@ jobs:
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install DigitalOcean Serverless support
+        run: doctl serverless install
 
       - name: Rollback deployment
         run: |
