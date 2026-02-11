@@ -20,16 +20,17 @@ def _log(msg):
         pass
 
 
-# Check availability of yt_dlp Python API at import time to provide clearer diagnostics
-try:
-    import yt_dlp as _yt_dlp_module
-    YT_DLP_PY_AVAILABLE = True
-    _log('yt_dlp Python module is available')
-except Exception as e:
-    YT_DLP_PY_AVAILABLE = False
-    _log(f'yt_dlp Python module NOT available: {e}')
+# Ensure any vendored packages are on sys.path (installed during build into ./vendor)
+import sys
+vendor_dir = os.path.join(os.path.dirname(__file__), 'vendor')
+if os.path.isdir(vendor_dir):
+    sys.path.insert(0, vendor_dir)
+    _log(f'Added vendor dir to sys.path: {vendor_dir}')
 
-# Check availability of yt-dlp binary in PATH
+# We will attempt to import yt_dlp at runtime inside the extractor so that
+# imports succeed even if vendor was installed during the build step.
+
+# Check availability of yt-dlp binary in PATH (we can log this early)
 try:
     import shutil
     YT_DLP_BIN_PATH = shutil.which(YT_DLP_PATH)
@@ -54,30 +55,28 @@ def extract_youtube_stream(video_id):
     try:
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         # Prefer using the yt_dlp Python API when available (no external binary dependency)
-        # Prefer Python API when available
-        if YT_DLP_PY_AVAILABLE:
-            try:
-                _log('Using yt_dlp Python API')
-                ydl_opts = {
-                    'format': 'best[ext=mp4][protocol^=http]/best[protocol^=http]',
-                    'skip_download': True,
-                    'quiet': True,
-                    'nocheckcertificate': True,
-                    'noplaylist': True,
-                }
-                if os.path.exists(COOKIES_FILE):
-                    ydl_opts['cookiefile'] = COOKIES_FILE
-                with _yt_dlp_module.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(youtube_url, download=False)
-                data = info
-                stream_url = data.get('url') or (data.get('formats')[-1].get('url') if data.get('formats') else None)
-                if not stream_url:
-                    _log('No URL found in yt_dlp API output')
-                    return None
-            except Exception as api_exc:
-                _log(f'yt_dlp Python API failed at runtime: {api_exc}; falling back to subprocess')
-        else:
-            _log('yt_dlp Python API not available; attempting subprocess fallback')
+        # Attempt to import and use the yt_dlp Python API at runtime (vendor dir already added to sys.path)
+        try:
+            import yt_dlp as _yt_dlp_module
+            _log('Using yt_dlp Python API')
+            ydl_opts = {
+                'format': 'best[ext=mp4][protocol^=http]/best[protocol^=http]',
+                'skip_download': True,
+                'quiet': True,
+                'nocheckcertificate': True,
+                'noplaylist': True,
+            }
+            if os.path.exists(COOKIES_FILE):
+                ydl_opts['cookiefile'] = COOKIES_FILE
+            with _yt_dlp_module.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=False)
+            data = info
+            stream_url = data.get('url') or (data.get('formats')[-1].get('url') if data.get('formats') else None)
+            if not stream_url:
+                _log('No URL found in yt_dlp API output')
+                return None
+        except Exception as api_exc:
+            _log(f'yt_dlp Python API failed at runtime: {api_exc}; falling back to subprocess')
 
         # Subprocess fallback only if binary exists
         if YT_DLP_BIN_PATH or shutil.which(YT_DLP_PATH):
