@@ -188,32 +188,59 @@ def extract_youtube_stream(video_id):
             if os.path.exists(COOKIES_FILE):
                 cmd.extend(["--cookies", COOKIES_FILE])
 
-            _log(f"Running subprocess fallback: {' '.join(cmd)}")
+            # Run python -m yt_dlp first (ensures PYTHONPATH and current interpreter usage)
+            import sys as _sys
+            python_cmd = [_sys.executable, '-m', 'yt_dlp', youtube_url,
+                          "--no-cache-dir", "--no-check-certificate", "--dump-single-json",
+                          "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
+            bin_cmd = [YT_DLP_BIN_PATH, youtube_url, "--no-cache-dir", "--no-check-certificate", "--dump-single-json", "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"] if YT_DLP_BIN_PATH else None
+            if os.path.exists(COOKIES_FILE):
+                python_cmd.extend(["--cookies", COOKIES_FILE])
+                if bin_cmd:
+                    bin_cmd.extend(["--cookies", COOKIES_FILE])
+
+            env = os.environ.copy()
+            vendor_py_paths = [
+                os.path.join(os.path.dirname(__file__), 'vendor'),
+                '/tmp/vendor'
+            ]
+            existing_pp = env.get('PYTHONPATH', '')
+            vendor_pp = os.pathsep.join([p for p in vendor_py_paths if p])
+            env['PYTHONPATH'] = vendor_pp + (os.pathsep + existing_pp if existing_pp else '')
+
+            # Attempt python -m first
+            _log(f"Running python module: {' '.join(python_cmd)}")
             try:
-                # Ensure subprocess Python can import vendored packages by setting PYTHONPATH
-                env = os.environ.copy()
-                vendor_py_paths = [
-                    os.path.join(os.path.dirname(__file__), 'vendor'),
-                    '/tmp/vendor'
-                ]
-                existing_pp = env.get('PYTHONPATH', '')
-                # Prepend vendor paths
-                vendor_pp = os.pathsep.join([p for p in vendor_py_paths if p])
-                env['PYTHONPATH'] = vendor_pp + (os.pathsep + existing_pp if existing_pp else '')
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT, env=env)
+                result = subprocess.run(python_cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT, env=env)
             except FileNotFoundError as fnf:
-                _log(f"yt-dlp binary not found when attempting subprocess: {fnf}")
-                return None
+                _log(f"python executable not found for python -m fallback: {fnf}")
+                result = None
             except Exception as e:
-                _log(f"yt-dlp subprocess failed: {e}")
-                return None
+                _log(f"python -m yt_dlp subprocess failed: {e}")
+                result = None
+
+            # If python -m failed or returned non-zero, try vendored binary as last resort
+            if (not result) or (result and result.returncode != 0):
+                if bin_cmd:
+                    _log(f"python -m yt_dlp failed; attempting vendored binary: {' '.join(bin_cmd)}")
+                    try:
+                        result = subprocess.run(bin_cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT, env=env)
+                    except FileNotFoundError as fnf:
+                        _log(f"vendored yt-dlp binary not found when attempting subprocess: {fnf}")
+                        return None
+                    except Exception as e:
+                        _log(f"vendored yt-dlp subprocess failed: {e}")
+                        return None
+                else:
+                    _log('python -m yt_dlp failed and no vendored binary available')
+                    return None
 
             log_entry['stdout'] = (result.stdout or '')[:2000]
             log_entry['stderr'] = (result.stderr or '')[:2000]
             _log(f"yt-dlp subprocess rc={result.returncode}; stdout_len={len(result.stdout or '')}; stderr_len={len(result.stderr or '')}")
 
             if result.returncode != 0:
-                _log(f"yt-dlp error (code {result.returncode}): {(result.stderr or '')[:400]}")
+                _log(f"yt-dlp error (code {result.returncode}): {(result.stderr or '')[:800]}")
                 return None
 
             try:
