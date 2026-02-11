@@ -31,33 +31,55 @@ def extract_youtube_stream(video_id):
 
     try:
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-        cmd = [
-            YT_DLP_PATH,
-            youtube_url,
-            "--no-cache-dir",
-            "--no-check-certificate",
-            "--dump-single-json",
-            "--no-playlist",
-            "-f",
-            "best[ext=mp4][protocol^=http]/best[protocol^=http]",
-        ]
-        if os.path.exists(COOKIES_FILE):
-            cmd.extend(["--cookies", COOKIES_FILE])
+        # Prefer using the yt_dlp Python API when available (no external binary dependency)
+        try:
+            import yt_dlp
+            _log('Using yt_dlp Python API')
+            ydl_opts = {
+                'format': 'best[ext=mp4][protocol^=http]/best[protocol^=http]',
+                'skip_download': True,
+                'quiet': True,
+                'nocheckcertificate': True,
+                'noplaylist': True,
+            }
+            if os.path.exists(COOKIES_FILE):
+                ydl_opts['cookiefile'] = COOKIES_FILE
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=False)
+            data = info
+            stream_url = data.get('url') or (data.get('formats')[-1].get('url') if data.get('formats') else None)
+            if not stream_url:
+                _log('No URL found in yt_dlp API output')
+                return None
+        except Exception as api_exc:
+            _log(f'yt_dlp API failed: {api_exc}; falling back to subprocess')
+            cmd = [
+                YT_DLP_PATH,
+                youtube_url,
+                "--no-cache-dir",
+                "--no-check-certificate",
+                "--dump-single-json",
+                "--no-playlist",
+                "-f",
+                "best[ext=mp4][protocol^=http]/best[protocol^=http]",
+            ]
+            if os.path.exists(COOKIES_FILE):
+                cmd.extend(["--cookies", COOKIES_FILE])
 
-        _log(f"Running: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT)
-        log_entry['stdout'] = result.stdout[:1000]
-        log_entry['stderr'] = result.stderr[:1000]
+            _log(f"Running: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=REQUEST_TIMEOUT)
+            log_entry['stdout'] = result.stdout[:1000]
+            log_entry['stderr'] = result.stderr[:1000]
 
-        if result.returncode != 0:
-            _log(f"yt-dlp error (code {result.returncode}): {result.stderr[:200]}")
-            return None
+            if result.returncode != 0:
+                _log(f"yt-dlp error (code {result.returncode}): {result.stderr[:200]}")
+                return None
 
-        data = json.loads(result.stdout)
-        stream_url = data.get('url')
-        if not stream_url:
-            _log('No URL found in yt-dlp output')
-            return None
+            data = json.loads(result.stdout)
+            stream_url = data.get('url')
+            if not stream_url:
+                _log('No URL found in yt-dlp output')
+                return None
 
         log_entry['success'] = True
         return {

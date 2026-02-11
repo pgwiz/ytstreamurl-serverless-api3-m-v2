@@ -2,7 +2,7 @@ packages:
   - name: default
     functions:
       - name: serverless_handler
-        main: serverless_handler:app
+        main: main
         runtime: python:3.11
         web: true
         limits:

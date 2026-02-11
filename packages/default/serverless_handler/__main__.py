@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 from datetime import datetime
 
 # Minimal handler following DigitalOcean Functions Python runtime guide

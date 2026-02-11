@@ -85,20 +85,55 @@ jobs:
         env:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: |
-          doctl serverless deploy ./
+          # Use remote build to install Python deps and to ensure build matches remote runtime
+          doctl serverless deploy . --include default --remote-build --verbose-build
 
       - name: Run smoke tests
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
         run: |
-          sleep 10
-          # Get the function URL from DigitalOcean
-          FUNCTION_URL=$(doctl serverless functions get default/stream-extractor --format endpoint --no-header 2>/dev/null || echo "")
-          
-          if [ -n "$FUNCTION_URL" ]; then
-            echo "Testing function endpoint: $FUNCTION_URL"
-            curl -X GET "$FUNCTION_URL" -H "Accept: application/json" || echo "Health check request failed"
-          else
-            echo "Function URL not available yet"
+          set -e
+          echo "Waiting for deployed function endpoint..."
+          ENDPOINT=""
+          for i in $(seq 1 12); do
+            ENDPOINT=$(doctl serverless functions get serverless_handler --url 2>/dev/null || true)
+            if [ -n "$ENDPOINT" ]; then
+              echo "Found endpoint: $ENDPOINT"
+              break
+            fi
+            echo "Endpoint not ready yet (attempt $i), retrying in 5s..."
+            sleep 5
+          done
+          if [ -z "$ENDPOINT" ]; then
+            echo "ERROR: function endpoint not found"
+            doctl serverless activations list serverless_handler --limit 5 --format ActivationID,Start,Function --output json || true
+            exit 1
           fi
+
+          URL="$ENDPOINT/api/stream/dQw4w9WgXcQ"
+          echo "Testing $URL"
+
+          HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" -H "Accept: application/json" "$URL" || true)
+          echo "HTTP code: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Smoke test failed. Response:" 
+            cat response.json || true
+            ACT=$(doctl serverless activations list serverless_handler --limit 1 --format ActivationID --output json | python -c "import sys, json; a=json.load(sys.stdin); print(a[0]['activationId'] if a else '')") || true
+            if [ -n "$ACT" ]; then
+              echo "Fetching activation logs for $ACT"
+              doctl serverless activations logs $ACT || true
+            fi
+            exit 1
+          fi
+
+          python - <<'PY'
+import sys, json
+obj=json.load(open('response.json'))
+if not obj.get('url'):
+    print('Missing url in response:', obj)
+    sys.exit(2)
+print('Smoke test passed: url found')
+PY
 
       - name: Create deployment summary
         if: always()
