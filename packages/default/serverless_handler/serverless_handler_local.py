@@ -99,3 +99,26 @@ def extract_youtube_stream(video_id):
     except Exception as e:
         _log(f'Extraction error: {e}')
         return None
+
+
+def search_youtube(query, limit=5):
+    """Search YouTube using yt_dlp's ytsearch and return simple result objects."""
+    try:
+        import yt_dlp
+        ydl_opts = {'quiet': True, 'skip_download': True, 'nocheckcertificate': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            data = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+        entries = data.get('entries', []) if isinstance(data, dict) else []
+        results = []
+        for e in entries:
+            results.append({
+                'id': e.get('id'),
+                'title': e.get('title'),
+                'duration': str(e.get('duration', 0)) if e.get('duration') is not None else '0',
+                'url': f"https://www.youtube.com/watch?v={e.get('id')}",
+                'thumbnail': e.get('thumbnail')
+            })
+        return results
+    except Exception as e:
+        _log(f'search_youtube error: {e}')
+        return []

@@ -184,7 +184,48 @@ def main(event=None, context=None):
         except Exception as e:
             _log(f'ytdlp error: {e}')
             return {"body": {"error": str(e)}, "statusCode": 500}
-
+    # API: /api/search/youtube
+    if path and path.startswith('/api/search/youtube'):
+        q = event.get('query', {}) if event else {}
+        query = (q.get('query') or q.get('q')) if isinstance(q, dict) else None
+        try:
+            limit = int(q.get('limit', 5)) if isinstance(q.get('limit', None), (str, int)) else 5
+        except Exception:
+            limit = 5
+        if not query:
+            return {"body": {"error": "Missing 'query' parameter"}, "statusCode": 400}
+        _log(f'api/search/youtube invoked for query="{query}" limit={limit}')
+        try:
+            # Prefer helper from serverless_handler_local if available
+            try:
+                from serverless_handler_local import search_youtube as _search
+            except Exception:
+                _log('serverless_handler_local.search_youtube not available; using inline search')
+                def _search(query, limit=5):
+                    try:
+                        import yt_dlp
+                        ydl_opts = {'quiet': True, 'skip_download': True, 'nocheckcertificate': True}
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            data = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+                        entries = data.get('entries', []) if isinstance(data, dict) else []
+                        results = []
+                        for e in entries:
+                            results.append({
+                                'id': e.get('id'),
+                                'title': e.get('title'),
+                                'duration': str(e.get('duration', 0)) if e.get('duration') is not None else '0',
+                                'url': f"https://www.youtube.com/watch?v={e.get('id')}",
+                                'thumbnail': e.get('thumbnail')
+                            })
+                        return results
+                    except Exception as e:
+                        _log(f'Inline search error: {e}')
+                        return []
+            results = _search(query, limit)
+            return {"body": {"query": query, "limit": limit, "results": results}, "statusCode": 200}
+        except Exception as e:
+            _log(f'search error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
     # Unknown path
     _log(f'unknown path: {path}')
     return {"body": {"error": "Not found", "path": path}, "statusCode": 404}
