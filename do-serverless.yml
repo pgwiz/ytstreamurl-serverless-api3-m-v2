@@ -47,4 +47,4 @@ repository:
 packages:
   - flask==3.0.0
   - requests==2.31.0
-  - yt-dlp==2024.1.16
+  - yt-dlp
