@@ -875,37 +875,50 @@ app.get('/stream/:videoId', async (req, res) => {
     try {
         // If DIGITALOCEAN_URL is set, use the serverless function as primary source
         if (process.env.DIGITALOCEAN_URL) {
-            const doUrl = `${process.env.DIGITALOCEAN_URL}/default/serverless_handler/api/stream/${videoId}`;
+            // Normalize the user-provided DIGITALOCEAN_URL. Users may set the full function URL
+            // including '/default/serverless_handler' as shown in docs, or just the domain.
+            const base = process.env.DIGITALOCEAN_URL.replace(/\/+$/, '');
+            let doUrl;
+            if (base.includes('/default/serverless_handler')) {
+                // User already provided the function base URL
+                doUrl = `${base}/api/stream/${videoId}`;
+            } else {
+                // Append the conventional path
+                doUrl = `${base}/default/serverless_handler/api/stream/${videoId}`;
+            }
+
             console.log(`Fetching stream from DigitalOcean: ${doUrl}`);
-            
+
             try {
                 const doResponse = await fetch(doUrl, {
                     method: 'GET',
                     headers: { 'Accept': 'application/json' },
                     signal: AbortSignal.timeout(30000) // 30 second timeout
                 });
-                
-                if (doResponse.ok) {
-                    const data = await doResponse.json();
-                    // DO returns: { url, title, uploader, thumbnail, duration, ext, format_id, id, videoId }
-                    // url is already a full HTTPS URL from Google CDN, no stripping needed
-                    if (data.url) {
-                        console.log(`✅ Got stream from DO for ${videoId}`);
-                        return res.json({
-                            videoId,
-                            streamUrl: data.url,
-                            url: data.url, // Include both for compatibility
-                            title: data.title || 'Unknown',
-                            uploader: data.uploader || 'Unknown',
-                            duration: data.duration || 'Unknown',
-                            thumbnail: data.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                            ext: data.ext,
-                            format_id: data.format_id
-                        });
-                    }
-                    console.warn(`DO returned OK but no url: ${JSON.stringify(data)}`);
-                } else {
-                    console.warn(`DO returned ${doResponse.status} for ${videoId}, falling back to local`);
+
+                const respText = await doResponse.text();
+                let doBody = null;
+                try { doBody = JSON.parse(respText); } catch (e) { doBody = respText; }
+
+                if (doResponse.ok && doBody && doBody.url) {
+                    console.log(`✅ Got stream from DO for ${videoId}`);
+                    return res.json({
+                        videoId,
+                        streamUrl: doBody.url,
+                        url: doBody.url, // Include both for compatibility
+                        title: doBody.title || 'Unknown',
+                        uploader: doBody.uploader || 'Unknown',
+                        duration: doBody.duration || 'Unknown',
+                        thumbnail: doBody.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                        ext: doBody.ext,
+                        format_id: doBody.format_id
+                    });
+                }
+
+                console.warn(`DO returned status ${doResponse.status} for ${videoId} with body: ${respText}`);
+                // forward DO error message to client for debugging, but keep fallback behavior
+                if (doResponse.status >= 400 && doResponse.status < 600) {
+                    return res.status(502).json({ error: 'DigitalOcean function returned error', status: doResponse.status, body: doBody });
                 }
             } catch (doError) {
                 console.warn(`DO fetch failed: ${doError.message}, falling back to local`);
