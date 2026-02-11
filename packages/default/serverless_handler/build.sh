@@ -2,15 +2,15 @@
 set -e
 
 # Build script for DigitalOcean Functions (Python 3.11)
-# Create a virtual environment and install requirements into it so they are packaged
+# Install Python requirements into a local 'vendor' directory using --target
+# so only site-packages are included (avoids creating a full virtualenv which can be large).
 
 PY="$(which python || which python3 || echo python)"
 $PY -m pip install --upgrade pip
-$PY -m venv virtualenv
-# Activate venv and install into site-packages
-. virtualenv/bin/activate
+# Install into ./vendor (site-packages) to keep package size small
+rm -rf vendor
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt --no-cache-dir
+python -m pip install --no-cache-dir --target ./vendor -r requirements.txt
 
 # Ensure files are present for deployment
 echo "Build complete"
