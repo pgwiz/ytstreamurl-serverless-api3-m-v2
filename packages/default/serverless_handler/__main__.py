@@ -59,9 +59,24 @@ def main(event=None, context=None):
                 try:
                     import importlib.util
                     base = os.path.dirname(__file__)
-                    path = os.path.join(base, '..', 'serverless_handler_local.py')
-                    path = os.path.abspath(path)
-                    spec = importlib.util.spec_from_file_location('sh_local', path)
+                    cwd = os.getcwd()
+                    candidates = [
+                        os.path.join(base, '..', 'serverless_handler_local.py'),
+                        os.path.join(base, '..', '..', 'serverless_handler_local.py'),
+                        os.path.join(cwd, 'serverless_handler_local.py'),
+                        os.path.join(cwd, 'packages', 'default', 'serverless_handler_local.py'),
+                        os.path.join(cwd, 'packages', 'default', 'serverless_handler', 'serverless_handler_local.py'),
+                        os.path.join(base, 'serverless_handler_local.py')
+                    ]
+                    found = None
+                    for p in candidates:
+                        p_abs = os.path.abspath(p)
+                        if os.path.exists(p_abs):
+                            found = p_abs
+                            break
+                    if not found:
+                        raise FileNotFoundError(f"Could not find serverless_handler_local.py in candidates: {candidates}")
+                    spec = importlib.util.spec_from_file_location('sh_local', found)
                     shl = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(shl)
                     extract_youtube_stream = shl.extract_youtube_stream
