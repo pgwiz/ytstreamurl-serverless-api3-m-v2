@@ -44,6 +44,38 @@ def main(event=None, context=None):
         _log('returning hello')
         return {"body": {"message": "hello from serverless_handler"}, "statusCode": 200}
 
+    # Serve playground UI and static assets
+    if path == '/playground':
+        try:
+            static_dir = os.path.join(os.path.dirname(__file__), 'static')
+            p = os.path.join(static_dir, 'playground.html')
+            with open(p, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return {"body": content, "statusCode": 200, "headers": {"Content-Type": "text/html; charset=utf-8"}}
+        except Exception as e:
+            _log(f'playground serve error: {e}')
+            return {"body": {"error": "Could not serve playground"}, "statusCode": 500}
+
+    if path and path.startswith('/static/'):
+        try:
+            static_dir = os.path.join(os.path.dirname(__file__), 'static')
+            rel = path[len('/static/'):]
+            # Prevent path traversal
+            target = os.path.abspath(os.path.join(static_dir, rel))
+            if not target.startswith(os.path.abspath(static_dir)) or not os.path.exists(target):
+                return {"body": {"error": "Not found"}, "statusCode": 404}
+            import mimetypes
+            mime, _ = mimetypes.guess_type(target)
+            mime = mime or 'application/octet-stream'
+            mode = 'rb' if not mime.startswith('text/') else 'r'
+            with open(target, mode, encoding='utf-8' if mode=='r' else None) as f:
+                data = f.read()
+            headers = {"Content-Type": mime}
+            return {"body": data, "statusCode": 200, "headers": headers}
+        except Exception as e:
+            _log(f'static serve error: {e}')
+            return {"body": {"error": "Not found"}, "statusCode": 404}
+
     # API: /api/stream/{videoId}
     if path and path.startswith('/api/stream/'):
         video_id = path.split('/')[-1]
