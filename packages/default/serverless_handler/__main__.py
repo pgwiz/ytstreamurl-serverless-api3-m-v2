@@ -79,6 +79,42 @@ def main(event=None, context=None):
             _log(f'static serve error: {e}')
             return {"body": {"error": "Not found"}, "statusCode": 404}
 
+    # Debug endpoint to inspect Python sys.path and vendor locations
+    if path and path.startswith('/debug/sys'):
+        try:
+            import sys
+            import shutil
+            vendors = [
+                os.path.join(os.path.dirname(__file__), 'vendor'),
+                os.path.join(os.path.dirname(__file__), '..', 'vendor'),
+                os.path.join(os.path.dirname(__file__), '..', '..', 'vendor'),
+                os.path.join(os.getcwd(), 'vendor'),
+            ]
+            vendor_info = {}
+            for v in vendors:
+                try:
+                    v_abs = os.path.abspath(v)
+                    vendor_info[v_abs] = os.path.isdir(v_abs)
+                except Exception as e:
+                    vendor_info[v] = f'error: {e}'
+            python_check = {
+                'sys_path': sys.path[:10],
+                'yt_dlp_importable': None,
+                'yt_dlp_location': None,
+                'yt_dlp_bin': shutil.which(os.environ.get('YT_DLP_PATH', 'yt-dlp'))
+            }
+            try:
+                import yt_dlp as _ym
+                python_check['yt_dlp_importable'] = True
+                python_check['yt_dlp_location'] = getattr(_ym, '__file__', None)
+            except Exception as ie:
+                python_check['yt_dlp_importable'] = False
+                python_check['yt_dlp_import_error'] = str(ie)
+            return {"body": {"vendor_candidates": vendor_info, "python_check": python_check}, "statusCode": 200}
+        except Exception as e:
+            _log(f'debug error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
+
     # API: /api/stream/{videoId}
     if path and path.startswith('/api/stream/'):
         video_id = path.split('/')[-1]
