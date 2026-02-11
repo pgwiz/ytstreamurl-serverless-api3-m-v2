@@ -1,1 +1,13 @@
-deployed_serverless_handler.zip\ntemp_serverless_handler_code.zip\ntemp_serverless_handler_code.py
+deployed_serverless_handler.zip
+temp_serverless_handler_code.zip
+temp_serverless_handler_code.py
+# Exclude Python bytecode and __pycache__ directories from deployment
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+# Editor and OS files
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
