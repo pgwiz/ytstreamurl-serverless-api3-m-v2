@@ -170,16 +170,16 @@ def extract_youtube_stream(video_id):
 
         # Subprocess fallback only if binary exists
         if YT_DLP_BIN_PATH or shutil.which(YT_DLP_PATH):
-            cmd = [
-                YT_DLP_BIN_PATH or YT_DLP_PATH,
-                youtube_url,
-                "--no-cache-dir",
-                "--no-check-certificate",
-                "--dump-single-json",
-                "--no-playlist",
-                "-f",
-                "best[ext=mp4][protocol^=http]/best[protocol^=http]",
-            ]
+            # Prefer invoking the module with the current Python interpreter so
+            # PYTHONPATH/env carrying ensures vendored packages are importable.
+            import sys as _sys
+            cmd = [_sys.executable, '-m', 'yt_dlp', youtube_url,
+                   "--no-cache-dir", "--no-check-certificate", "--dump-single-json",
+                   "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
+            # Fallback: if python -m yt_dlp is not applicable, use vendored binary
+            if not shutil.which('yt_dlp') and YT_DLP_BIN_PATH:
+                # use vendored binary directly
+                cmd = [YT_DLP_BIN_PATH, youtube_url, "--no-cache-dir", "--no-check-certificate", "--dump-single-json", "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
             if os.path.exists(COOKIES_FILE):
                 cmd.extend(["--cookies", COOKIES_FILE])
 
