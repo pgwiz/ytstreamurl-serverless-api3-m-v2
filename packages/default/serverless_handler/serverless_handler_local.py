@@ -177,9 +177,12 @@ def extract_youtube_stream(video_id):
                    "--no-cache-dir", "--no-check-certificate", "--dump-single-json",
                    "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
             # If Python import failed earlier, fall back to a vendored binary; otherwise prefer `python -m yt_dlp`
-            if (globals().get('PY_IMPORT_ERROR') is not None) and YT_DLP_BIN_PATH:
+            # Only use vendored binary if the earlier error looks like an import error
+            py_err = globals().get('PY_IMPORT_ERROR')
+            if py_err and ('No module named' in str(py_err) or 'ImportError' in str(py_err)) and YT_DLP_BIN_PATH:
                 # use vendored binary directly
                 cmd = [YT_DLP_BIN_PATH, youtube_url, "--no-cache-dir", "--no-check-certificate", "--dump-single-json", "--no-playlist", "-f", "best[ext=mp4][protocol^=http]/best[protocol^=http]"]
+                _log('Falling back to vendored binary because of import error')
             else:
                 _log('Using subprocess via python -m yt_dlp (preferred)')
             if os.path.exists(COOKIES_FILE):
