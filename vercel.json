@@ -1,7 +1,6 @@
 {
     "version": 2,
     "env": {
-        "PROXY": "@proxy_url",
         "DIGITALOCEAN_URL": "@digitalocean_url"
     },
     "builds": [
