@@ -28,6 +28,7 @@ candidates = [
     os.path.join(os.path.dirname(__file__), '..', 'vendor'),
     os.path.join(os.path.dirname(__file__), '..', '..', 'vendor'),
     os.path.join(os.getcwd(), 'vendor'),
+    '/tmp/vendor',  # DigitalOcean remote-build installs --target ./vendor into /tmp during build
 ]
 for v in candidates:
     try:
