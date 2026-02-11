@@ -22,10 +22,22 @@ def _log(msg):
 
 # Ensure any vendored packages are on sys.path (installed during build into ./vendor)
 import sys
-vendor_dir = os.path.join(os.path.dirname(__file__), 'vendor')
-if os.path.isdir(vendor_dir):
-    sys.path.insert(0, vendor_dir)
-    _log(f'Added vendor dir to sys.path: {vendor_dir}')
+# Search multiple candidate vendor locations (support installs at repo root or package dir)
+candidates = [
+    os.path.join(os.path.dirname(__file__), 'vendor'),
+    os.path.join(os.path.dirname(__file__), '..', 'vendor'),
+    os.path.join(os.path.dirname(__file__), '..', '..', 'vendor'),
+    os.path.join(os.getcwd(), 'vendor'),
+]
+for v in candidates:
+    try:
+        v_abs = os.path.abspath(v)
+        if os.path.isdir(v_abs):
+            sys.path.insert(0, v_abs)
+            _log(f'Added vendor dir to sys.path: {v_abs}')
+            break
+    except Exception as e:
+        _log(f'Error checking vendor candidate {v}: {e}')
 
 # We will attempt to import yt_dlp at runtime inside the extractor so that
 # imports succeed even if vendor was installed during the build step.
