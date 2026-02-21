@@ -10,8 +10,9 @@ services:
       - "5000:5000"
     environment:
       - PORT=5000
-      - ENV=production
+      - ENV=development
       - LOG_DIR=/tmp/proxyLogs
+      - COOKIES_FILE=/tmp/cookies.txt
       - REQUEST_TIMEOUT=60
     volumes:
       - ./logs:/tmp/proxyLogs
@@ -22,10 +23,4 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s
-
-# Usage:
-# Build: docker-compose build
-# Start: docker-compose up -d
-# Logs: docker-compose logs -f
-# Stop: docker-compose down
+      start_period: 10s
