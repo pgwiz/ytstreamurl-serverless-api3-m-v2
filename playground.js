@@ -1,6 +1,15 @@
 // State
 let currentMode = 'youtube';
 let libraryMode = false;
+let isDockerDeployment = false; // Detect Docker deployment
+
+// Detect if running on Docker/Koyeb by checking if proxy_url is available
+function detectEnvironment() {
+    const hostname = window.location.hostname;
+    // Docker deployments typically use koyeb.app or custom domains with /stream/play endpoints
+    isDockerDeployment = hostname.includes('koyeb') || hostname.includes('render') || hostname.includes('herokuapp');
+    console.log(`[ENV] Docker Deployment: ${isDockerDeployment}`);
+}
 
 // DOM Elements
 const queryInput = document.getElementById('search-query');
@@ -106,14 +115,22 @@ async function getStreamFromUrl() {
 
         if (data.tracks && data.tracks.length > 0) {
             const track = data.tracks[0];
+            const playUrl = (isDockerDeployment && track.proxy_url) 
+                ? window.location.origin + track.proxy_url 
+                : track.url;
+            
             playTrack({
                 title: track.title,
                 artist: track.uploader,
                 thumbnail: track.thumbnail,
-                url: track.url,
+                url: playUrl,
+                directUrl: track.url,
+                proxyUrl: track.proxy_url ? (window.location.origin + track.proxy_url) : null,
                 videoId: track.videoId
             });
-            log(`Playing direct stream: ${track.title}`);
+            
+            const streamMethod = (isDockerDeployment && track.proxy_url) ? 'proxy' : 'direct';
+            log(`Playing ${streamMethod} stream: ${track.title}`);
         } else {
             log('No streamable tracks found');
         }
@@ -170,17 +187,29 @@ async function fetchAndPlay(item) {
         const res = await fetch(streamApiUrl);
         const data = await res.json();
 
-        if (data.streamUrl) {
+        if (data.streamUrl || data.url) {
+            // Support both old (streamUrl) and new (url) field names
+            const directUrl = data.streamUrl || data.url;
+            
+            // Use proxy URL if available and on Docker deployment
+            const playUrl = (isDockerDeployment && data.proxy_url) 
+                ? window.location.origin + data.proxy_url 
+                : directUrl;
+            
             playTrack({
                 title: item.title || item.name,
                 artist: item.artist || item.uploader,
                 thumbnail: item.thumbnail,
-                url: data.streamUrl,
+                url: playUrl,
+                directUrl: directUrl,
+                proxyUrl: data.proxy_url ? (window.location.origin + data.proxy_url) : null,
                 videoId: videoId,
                 ext: data.ext || 'mp4',
                 isLive: data.isLive
             });
-            log(`Success! Playing: ${item.name || item.title} [${data.ext || 'mp4'}]`);
+            
+            const streamMethod = (isDockerDeployment && data.proxy_url) ? 'proxy' : 'direct';
+            log(`Success! Playing: ${item.name || item.title} [${data.ext || 'mp4'}] (${streamMethod})`);
         } else {
             log('Failed to get stream URL');
         }
@@ -199,6 +228,15 @@ function playTrack(track) {
     log(`🎵 Setting Audio Source: ${track.url}`);
     audioElement.src = track.url;
 
+    // Log available URLs
+    if (track.directUrl) {
+        log(`📡 Direct URL: ${track.directUrl.substring(0, 80)}...`);
+    }
+    if (track.proxyUrl) {
+        log(`🔗 Proxy URL: ${track.proxyUrl}`);
+        log(`💡 Copy-friendly proxy for sharing/embedding`);
+    }
+
     // Log media events to debug "No supported source"
     audioElement.onerror = (e) => {
         const err = audioElement.error;
@@ -206,6 +244,28 @@ function playTrack(track) {
     };
 
     audioElement.play().catch(e => log(`Playback failed: ${e.message}`));
+    
+    // Store current track for copy functions
+    window.currentTrack = track;
+}
+
+// Copy URL functions
+function copyDirectUrl() {
+    if (!window.currentTrack || !window.currentTrack.directUrl) {
+        log('❌ Direct URL not available');
+        return;
+    }
+    navigator.clipboard.writeText(window.currentTrack.directUrl);
+    log('📋 Direct URL copied to clipboard');
+}
+
+function copyProxyUrl() {
+    if (!window.currentTrack || !window.currentTrack.proxyUrl) {
+        log('❌ Proxy URL not available');
+        return;
+    }
+    navigator.clipboard.writeText(window.currentTrack.proxyUrl);
+    log('📋 Proxy URL copied to clipboard');
 }
 
 function renderResults(results) {
@@ -255,10 +315,35 @@ function renderResults(results) {
 
         // Copy Link Button
         const copyBtn = clone.querySelector('.copy-btn');
-        copyBtn.onclick = (e) => {
+        copyBtn.onclick = async (e) => {
             e.stopPropagation();
             const id = item.videoId || item.id;
             if (!id) return;
+            
+            // If Docker deployment, fetch the stream to get proxy URL
+            if (isDockerDeployment) {
+                try {
+                    const res = await fetch(`/stream/${id}`);
+                    const data = await res.json();
+                    if (data.proxy_url) {
+                        const proxyUrl = window.location.origin + data.proxy_url;
+                        navigator.clipboard.writeText(proxyUrl).then(() => {
+                            const originalText = copyBtn.innerHTML;
+                            copyBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3 text-green-400"></i>';
+                            setTimeout(() => {
+                                copyBtn.innerHTML = originalText;
+                                lucide.createIcons();
+                            }, 2000);
+                            log(`📋 Copied Proxy URL: ${proxyUrl}`);
+                        });
+                        return;
+                    }
+                } catch (e) {
+                    log(`Could not fetch proxy URL: ${e.message}`);
+                }
+            }
+            
+            // Fallback to direct URL
             const fullUrl = `${window.location.origin}/stream/${id}`;
             navigator.clipboard.writeText(fullUrl).then(() => {
                 const originalText = copyBtn.innerHTML;
@@ -267,7 +352,7 @@ function renderResults(results) {
                     copyBtn.innerHTML = originalText;
                     lucide.createIcons();
                 }, 2000);
-                log(`Copied URL: ${fullUrl}`);
+                log(`📋 Copied URL: ${fullUrl}`);
             });
         };
 
@@ -299,5 +384,9 @@ function renderResults(results) {
     lucide.createIcons();
 }
 
-// Initial Log
-log('Playground initialized. Ready for requests.');
+// Initial Setup
+detectEnvironment();
+log(`Playground initialized. Ready for requests. [${isDockerDeployment ? 'Docker' : 'Vercel'}]`);
+if (isDockerDeployment) {
+    log('✅ Proxy URL support enabled - videos will stream through server');
+}
