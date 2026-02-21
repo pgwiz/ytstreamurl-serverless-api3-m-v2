@@ -1,5 +1,5 @@
 # Multi-stage build for YouTube stream extraction API with playground UI
-# Build date: 2026-02-22 (force rebuild)
+# Build date: 2026-02-22 13:00 (inlined YoutubeExtractor to avoid import issues)
 FROM node:20-alpine AS js-base
 WORKDIR /app
 
@@ -33,7 +33,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY app.py .
-COPY youtube_extractor.py .
 COPY static ./static/
 
 # Copy cookies if available - try both locations
