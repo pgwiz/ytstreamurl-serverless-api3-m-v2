@@ -40,28 +40,43 @@ class YoutubeExtractor:
             self.cookies_file, '/app/cookies.txt', '/tmp/cookies.txt', 'cookies.txt'
         ]
         
-        for path in possible_paths:
-            if path and os.path.exists(path):
-                try:
-                    with open(path, "r", encoding='utf-8') as f:
-                        cookie_data = f.read()
-                    if cookie_data.strip():
-                        temp_dir = tempfile.gettempdir()
-                        cookie_path = os.path.join(temp_dir, "yt_cookies_runtime.txt")
-                        
-                        if not os.path.exists(cookie_path):
-                            with open(cookie_path, "w", encoding='utf-8') as f:
-                                f.write(cookie_data)
-                        
-                        self.cookie_manager['path'] = cookie_path
-                        self.cookie_manager['loaded'] = True
-                        self.log(f'🍪 Cookies loaded from: {path} ({len(cookie_data)} bytes)')
-                        return cookie_path
-                except Exception as e:
-                    self.log(f'⚠️ Failed to load cookies from {path}: {e}')
+        self.log(f'🔍 DEBUG: COOKIES_FILE env var: {self.cookies_file}')
+        self.log(f'🔍 DEBUG: Current working directory: {os.getcwd()}')
+        self.log(f'🔍 DEBUG: Searching for cookies in: {possible_paths}')
         
+        for path in possible_paths:
+            self.log(f'🔍 DEBUG: Checking {path} - exists: {path and os.path.exists(path)}')
+            if path:
+                if os.path.exists(path):
+                    self.log(f'✓ Found cookies file at: {path}')
+                    try:
+                        with open(path, "r", encoding='utf-8') as f:
+                            cookie_data = f.read()
+                        self.log(f'✓ Successfully read {len(cookie_data)} bytes from {path}')
+                        if cookie_data.strip():
+                            temp_dir = tempfile.gettempdir()
+                            cookie_path = os.path.join(temp_dir, "yt_cookies_runtime.txt")
+                            self.log(f'🔍 DEBUG: Creating runtime cookie file at: {cookie_path}')
+                            
+                            if not os.path.exists(cookie_path):
+                                with open(cookie_path, "w", encoding='utf-8') as f:
+                                    f.write(cookie_data)
+                            
+                            self.cookie_manager['path'] = cookie_path
+                            self.cookie_manager['loaded'] = True
+                            self.log(f'🍪 Cookies loaded from: {path} ({len(cookie_data)} bytes)')
+                            return cookie_path
+                    except Exception as e:
+                        self.log(f'⚠️ Failed to load cookies from {path}: {e}')
+                else:
+                    self.log(f'✗ {path} does not exist')
+            else:
+                self.log(f'✗ Path is None')
+        
+        self.log('🔍 DEBUG: Checking environment variable YTDLP_COOKIES')
         cookie_data = os.environ.get("YTDLP_COOKIES")
         if cookie_data:
+            self.log(f'✓ Found YTDLP_COOKIES environment variable ({len(cookie_data)} bytes)')
             try:
                 temp_dir = tempfile.gettempdir()
                 cookie_path = os.path.join(temp_dir, "yt_cookies_runtime.txt")
@@ -74,8 +89,10 @@ class YoutubeExtractor:
                 return cookie_path
             except Exception as e:
                 self.log(f'⚠️ Cookie loading from env failed: {e}')
+        else:
+            self.log('✗ YTDLP_COOKIES environment variable not set')
         
-        self.log('⚠️ No cookies found - authentication may be required')
+        self.log('❌ No cookies found - yt-dlp will require authentication for protected videos')
         return None
     
     def search_youtube(self, query, limit=5):
@@ -294,9 +311,22 @@ if __name__ == '__main__':
     import shutil
     
     log(f'🚀 Starting YouTube Stream API on port {PORT}')
+    log(f'📁 Working directory: {os.getcwd()}')
+    log(f'🔍 Directory contents: {os.listdir(".")[:10]}')
     log(f'Node.js available: {bool(shutil.which("node"))}')
     
-    # Check cookies using extractor's method
+    # Debug: List files in key locations
+    for debug_path in ['/app', '/app/static', '/tmp']:
+        if os.path.exists(debug_path):
+            try:
+                files = os.listdir(debug_path)
+                log(f'📂 {debug_path}: {files[:10]}')
+            except:
+                log(f'❌ Cannot list {debug_path}')
+        else:
+            log(f'❌ {debug_path} does not exist')
+    
+    # Check cookies using extractor's method (with debug output)
     cookies_path = extractor.get_cookie_file_path()
     log(f'Cookies available: {bool(cookies_path)} ({cookies_path if cookies_path else "not found"})')
     

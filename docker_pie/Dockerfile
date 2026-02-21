@@ -35,9 +35,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY static ./static/
 
-# Copy cookies if available - try both locations
-COPY cookies.txt /app/cookies.txt 2>/dev/null || true
-RUN test -f /app/cookies.txt || echo "INFO: No cookies.txt in docker_pie - will check runtime paths"
+# Copy cookies if available
+COPY cookies.txt /app/cookies.txt
+RUN ls -lah /app/cookies.txt || echo "⚠️ WARNING: cookies.txt not copied"
 
 # Create necessary directories
 RUN mkdir -p /tmp/proxyLogs /tmp/videos
