@@ -1,5 +1,6 @@
 // State
 let currentMode = 'youtube';
+let libraryMode = false;
 
 // DOM Elements
 const queryInput = document.getElementById('search-query');
@@ -20,6 +21,9 @@ function setMode(mode) {
 
     document.getElementById('btn-spotify').className = mode === 'spotify'
         ? 'flex-1 py-2 text-xs font-medium rounded-md bg-green-600 text-white shadow transition'
+        : 'flex-1 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition';
+    document.getElementById('btn-library').className = mode === 'library'
+        ? 'flex-1 py-2 text-xs font-medium rounded-md bg-indigo-600 text-white shadow transition'
         : 'flex-1 py-2 text-xs font-medium rounded-md text-gray-400 hover:text-white transition';
 
     document.getElementById('spotify-type').disabled = mode !== 'spotify';
@@ -58,12 +62,21 @@ async function performSearch() {
 
     const limit = document.getElementById('search-limit').value || 10;
     const spotifyType = document.getElementById('spotify-type').value;
+    const audioTime = document.getElementById('search-audio-time').value.trim();
 
     let url = '';
     if (currentMode === 'youtube') {
         url = `/api/search/youtube?query=${encodeURIComponent(query)}&limit=${limit}`;
+        if (audioTime) url += `&audio_time=${encodeURIComponent(audioTime)}`;
     } else {
         url = `/api/search/spotify?query=${encodeURIComponent(query)}&type=${spotifyType}&limit=${limit}`;
+        if (audioTime) url += `&audio_time=${encodeURIComponent(audioTime)}`;
+    }
+
+    if (currentMode === 'library') {
+        // Library mode: call library endpoint (backend hook)
+        url = `/api/library?query=${encodeURIComponent(query)}&limit=${limit}`;
+        if (audioTime) url += `&audio_time=${encodeURIComponent(audioTime)}`;
     }
 
     log(`Fetching: ${url}`);
@@ -212,6 +225,27 @@ function renderResults(results) {
         clone.querySelector('.result-artist').textContent = item.artist || item.uploader || 'Unknown';
         clone.querySelector('.result-duration').textContent = item.duration_string || item.duration || '';
         clone.querySelector('.result-thumb').src = item.thumbnail || '';
+        // Description / snippet if present
+        const desc = item.description || item.summary || item.snippet || '';
+        const descNode = clone.querySelector('.result-desc');
+        if (descNode) descNode.textContent = desc;
+
+        // Translation area
+        const translationText = clone.querySelector('.translation-text');
+        if (translationText) translationText.textContent = item.translation || item.translated || 'No translation';
+
+        // Tags
+        const tags = item.tags || item.keywords || [];
+        const tagList = clone.querySelector('.tag-list');
+        if (tagList) {
+            tagList.innerHTML = '';
+            tags.slice(0,3).forEach(t => {
+                const el = document.createElement('span');
+                el.className = 'inline-block bg-gray-700 text-xs px-2 py-1 rounded mr-1';
+                el.textContent = t;
+                tagList.appendChild(el);
+            });
+        }
 
         // Play Button Click
         clone.querySelector('.play-btn').onclick = (e) => {
@@ -225,7 +259,6 @@ function renderResults(results) {
             e.stopPropagation();
             const id = item.videoId || item.id;
             if (!id) return;
-
             const fullUrl = `${window.location.origin}/stream/${id}`;
             navigator.clipboard.writeText(fullUrl).then(() => {
                 const originalText = copyBtn.innerHTML;
@@ -237,6 +270,22 @@ function renderResults(results) {
                 log(`Copied URL: ${fullUrl}`);
             });
         };
+
+        // Copy Translation Button
+        const copyTransBtn = clone.querySelector('.copy-translation');
+        if (copyTransBtn) {
+            copyTransBtn.onclick = (e) => {
+                e.stopPropagation();
+                const text = (item.translation || item.translated || '').toString();
+                if (!text) return;
+                navigator.clipboard.writeText(text).then(() => {
+                    const orig = copyTransBtn.innerHTML;
+                    copyTransBtn.innerHTML = 'Copied';
+                    setTimeout(() => copyTransBtn.innerHTML = orig, 1400);
+                    log('Copied translation to clipboard');
+                });
+            };
+        }
 
         // JSON log click
         clone.querySelector('.json-btn').onclick = (e) => {

@@ -2,15 +2,25 @@
 set -e
 
 # Build script for DigitalOcean Functions (Python 3.11)
-# Install Python requirements into a local 'vendor' directory using --target
-# so only site-packages are included (avoids creating a full virtualenv which can be large).
+echo "📦 Starting build process..."
 
+# Install Node.js for yt-dlp JavaScript runtime support
+echo "📦 Installing Node.js for JavaScript signature solving..."
+apt-get update -qq && apt-get install -y -qq nodejs npm > /dev/null 2>&1 || (echo "⚠️  Node.js install failed (continuing anyway)" && true)
+if command -v node &> /dev/null; then
+    echo "✅ Node.js available: $(node --version)"
+else
+    echo "⚠️  Node.js not available"
+fi
+
+# Install Python requirements
 PY="$(which python || which python3 || echo python)"
 $PY -m pip install --upgrade pip
-# Install into ./vendor (site-packages) to keep package size small
+
+echo "🐍 Installing Python packages to vendor directory..."
 rm -rf vendor
 python -m pip install --upgrade pip
 python -m pip install --no-cache-dir --target ./vendor -r requirements.txt
 
-# Ensure files are present for deployment
-echo "Build complete"
+echo "🦕 Deno JS runtime will be installed at runtime if needed..."
+echo "✅ Build complete"

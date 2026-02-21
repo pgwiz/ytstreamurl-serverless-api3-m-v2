@@ -154,6 +154,15 @@ def main(event=None, context=None):
                         vendor_listing[k] = f'error listing: {e}'
                 python_check['vendor_listing_sample'] = vendor_listing
 
+            # Attempt to run the module directly to get its version (falls back to non-binary)
+            try:
+                import sys as _sys
+                proc_ver = subprocess.run([_sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=5)
+                python_check['yt_dlp_module_version'] = (proc_ver.stdout or '').strip()
+                python_check['yt_dlp_module_version_rc'] = proc_ver.returncode
+            except Exception as ver_e:
+                python_check['yt_dlp_module_version_error'] = str(ver_e)
+
             return {"body": {"vendor_candidates": vendor_info, "python_check": python_check}, "statusCode": 200}
         except Exception as e:
             _log(f'debug error: {e}')
@@ -169,6 +178,171 @@ def main(event=None, context=None):
                 return {"body": {"yt_dlp": False, "error": str(ie)}, "statusCode": 200}
         except Exception as e:
             _log(f'debug/py error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
+
+    # Debug endpoint to check `python -m yt_dlp --version`
+    if path and ('/debug/ytdlp_version' in path):
+        try:
+            import sys as _sys
+            env = os.environ.copy()
+            existing_pp = env.get('PYTHONPATH', '')
+            vendor_paths = []
+            for p in ['/tmp/vendor', '/tmp/vendor/lib/python3.11/site-packages', '/tmp/.local/lib/python3.11/site-packages']:
+                try:
+                    if os.path.isdir(p):
+                        vendor_paths.append(p)
+                except Exception:
+                    continue
+            new_pp = os.pathsep.join(vendor_paths) if vendor_paths else ''
+            if new_pp and existing_pp:
+                env['PYTHONPATH'] = new_pp + os.pathsep + existing_pp
+            elif new_pp:
+                env['PYTHONPATH'] = new_pp
+            else:
+                env['PYTHONPATH'] = existing_pp
+
+            proc = subprocess.run([_sys.executable, '-m', 'yt_dlp', '--version'], capture_output=True, text=True, timeout=5, env=env)
+            return {"body": {"version": (proc.stdout or '').strip(), "rc": proc.returncode, "stderr": (proc.stderr or '').strip()}, "statusCode": 200}
+        except Exception as e:
+            _log(f'debug/ytdlp_version error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
+
+    # Debug endpoint to check cookies file status
+    if path and ('/debug/cookies' in path):
+        try:
+            # Check local package directory first
+            _package_dir = os.path.dirname(os.path.abspath(__file__))
+            _local_cookies = os.path.join(_package_dir, 'cookies.txt')
+            
+            if os.path.exists(_local_cookies):
+                cookies_path = _local_cookies
+            else:
+                cookies_path = os.environ.get('COOKIES_FILE', '/tmp/cookies.txt')
+            
+            cookies_info = {
+                "path": cookies_path,
+                "exists": os.path.exists(cookies_path),
+                "size": None,
+                "readable": False,
+                "line_count": 0,
+                "netscape_format": False
+            }
+            
+            if cookies_info["exists"]:
+                try:
+                    stat_info = os.stat(cookies_path)
+                    cookies_info["size"] = stat_info.st_size
+                    cookies_info["readable"] = os.access(cookies_path, os.R_OK)
+                    
+                    # Try to read first few lines to validate Netscape format
+                    with open(cookies_path, 'r') as f:
+                        lines = f.readlines()
+                        cookies_info["line_count"] = len(lines)
+                        # Netscape format starts with "# Netscape HTTP Cookie File"
+                        if lines and '# Netscape HTTP Cookie File' in lines[0]:
+                            cookies_info["netscape_format"] = True
+                        cookies_info["first_line"] = lines[0].strip() if lines else ""
+                except Exception as read_err:
+                    cookies_info["read_error"] = str(read_err)
+            
+            return {"body": cookies_info, "statusCode": 200}
+        except Exception as e:
+            _log(f'debug/cookies error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
+
+    # Debug endpoint to check Deno JS runtime status
+    if path and ('/debug/deno' in path):
+        try:
+            deno_candidates = [
+                os.path.join(os.path.dirname(__file__), 'vendor', 'bin', 'deno'),
+                '/tmp/vendor/bin/deno',
+                os.path.join(os.getcwd(), 'vendor', 'bin', 'deno'),
+                '/tmp/deno/deno',
+            ]
+            deno_info = {
+                "candidates_checked": [],
+                "found": False,
+                "path": None,
+                "executable": False,
+                "version": None
+            }
+            
+            for candidate in deno_candidates:
+                candidate_info = {
+                    "path": candidate,
+                    "exists": os.path.isfile(candidate),
+                    "executable": os.access(candidate, os.X_OK) if os.path.isfile(candidate) else False
+                }
+                deno_info["candidates_checked"].append(candidate_info)
+                
+                if candidate_info["exists"] and candidate_info["executable"]:
+                    deno_info["found"] = True
+                    deno_info["path"] = candidate
+                    deno_info["executable"] = True
+                    
+                    # Try to get version
+                    try:
+                        proc = subprocess.run([candidate, '--version'], capture_output=True, text=True, timeout=5)
+                        deno_info["version"] = (proc.stdout or '').strip()
+                        deno_info["version_rc"] = proc.returncode
+                    except Exception as ver_err:
+                        deno_info["version_error"] = str(ver_err)
+                    break
+            
+            # Also check PATH
+            if not deno_info["found"]:
+                import shutil
+                path_deno = shutil.which('deno')
+                if path_deno:
+                    deno_info["found"] = True
+                    deno_info["path"] = path_deno
+                    deno_info["executable"] = True
+                    deno_info["source"] = "PATH"
+            
+            return {"body": deno_info, "statusCode": 200}
+        except Exception as e:
+            _log(f'debug/deno error: {e}')
+            return {"body": {"error": str(e)}, "statusCode": 500}
+
+    # Debug endpoint to test Deno download at runtime
+    if path and ('/debug/deno_download' in path):
+        try:
+            _log('Testing ensure_deno() download...')
+            from serverless_handler_local import ensure_deno
+            
+            download_result = {
+                "started": True,
+                "path": None,
+                "success": False,
+                "logs": []
+            }
+            
+            try:
+                js_runtime = ensure_deno(timeout=45)
+                download_result["path"] = js_runtime
+                download_result["success"] = js_runtime is not None
+                
+                if js_runtime:
+                    # Test the runtime using module-level subprocess (do not re-import here)
+                    try:
+                        test_proc = subprocess.run([js_runtime, '--version'], capture_output=True, text=True, timeout=5)
+                        download_result["version_test"] = {
+                            "rc": test_proc.returncode,
+                            "stdout": test_proc.stdout.strip(),
+                            "stderr": test_proc.stderr.strip()
+                        }
+                    except Exception as test_err:
+                        download_result["version_test_error"] = str(test_err)
+                else:
+                    download_result["error"] = "ensure_deno() returned None"
+            except Exception as dl_err:
+                download_result["error"] = str(dl_err)
+                import traceback
+                download_result["traceback"] = traceback.format_exc()
+            
+            return {"body": download_result, "statusCode": 200}
+        except Exception as e:
+            _log(f'debug/deno_download error: {e}')
             return {"body": {"error": str(e)}, "statusCode": 500}
 
     # API: /api/stream/{videoId}
@@ -209,20 +383,79 @@ def main(event=None, context=None):
                         def extract_youtube_stream(video_id):
                             try:
                                 youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-                                cmd = [
-                                    os.environ.get('YT_DLP_PATH', 'yt-dlp'),
-                                    youtube_url,
-                                    "--no-cache-dir",
-                                    "--no-check-certificate",
-                                    "--dump-single-json",
-                                    "--no-playlist",
-                                    "-f",
-                                    "best[ext=mp4][protocol^=http]/best[protocol^=http]",
-                                ]
-                                cookies = os.environ.get('COOKIES_FILE', '/tmp/cookies.txt')
+                                import shutil, sys as _sys
+                                binary_candidate = shutil.which(os.environ.get('YT_DLP_PATH', 'yt-dlp'))
+                                if binary_candidate:
+                                    cmd = [
+                                        binary_candidate,
+                                        youtube_url,
+                                        "--no-cache-dir",
+                                        "--no-check-certificate",
+                                        "--dump-single-json",
+                                        "--no-playlist",
+                                        "-f",
+                                        "best[ext=mp4][protocol^=http]/best[protocol^=http]",
+                                    ]
+                                    _log(f"Running (inline binary): {binary_candidate}")
+                                else:
+                                    cmd = [
+                                        _sys.executable, '-m', 'yt_dlp',
+                                        youtube_url,
+                                        "--no-cache-dir",
+                                        "--no-check-certificate",
+                                        "--dump-single-json",
+                                        "--no-playlist",
+                                        "-f",
+                                        "best[ext=mp4][protocol^=http]/best[protocol^=http]",
+                                    ]
+                                    _log(f"Running (inline python -m yt_dlp): {_sys.executable} -m yt_dlp")
+                                
+                                # Check for Deno JS runtime - attempt to get or download
+                                deno_path = None
+                                try:
+                                    # Try importing ensure_deno from serverless_handler_local
+                                    try:
+                                        from serverless_handler_local import ensure_deno
+                                        deno_path = ensure_deno()
+                                    except ImportError:
+                                        # Fallback: check common locations only (no download)
+                                        deno_candidates = [
+                                            os.path.join(os.path.dirname(__file__), 'vendor', 'bin', 'deno'),
+                                            '/tmp/vendor/bin/deno',
+                                            os.path.join(os.getcwd(), 'vendor', 'bin', 'deno'),
+                                            '/tmp/deno/deno'
+                                        ]
+                                        for candidate in deno_candidates:
+                                            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                                                deno_path = candidate
+                                                break
+                                        if not deno_path:
+                                            import shutil
+                                            deno_path = shutil.which('deno')
+                                except Exception as de:
+                                    _log(f'Error checking for Deno: {de}')
+
+                                if deno_path:
+                                    cmd.extend(['--js-runtimes', f'deno:{deno_path}'])
+                                    _log(f'🦕 Deno runtime (inline): {deno_path}')
+                                
+                                # Check local package directory first for cookies
+                                _pkg_dir = os.path.dirname(os.path.abspath(__file__))
+                                _local_cookies = os.path.join(_pkg_dir, 'cookies.txt')
+                                if os.path.exists(_local_cookies):
+                                    cookies = _local_cookies
+                                else:
+                                    cookies = os.environ.get('COOKIES_FILE', '/tmp/cookies.txt')
+                                cookies_used = False
                                 if os.path.exists(cookies):
                                     cmd.extend(["--cookies", cookies])
+                                    cookies_used = True
+                                    _log(f"✅ Using cookies (inline): {cookies}")
+                                else:
+                                    _log(f"⚠️ No cookies file (inline): {cookies}")
                                 _log(f"Running (inline): {' '.join(cmd)}")
+                                if cookies_used:
+                                    _log("🍪 Cookies enabled for this request")
                                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=int(os.environ.get('REQUEST_TIMEOUT', '45')))
                                 if result.returncode != 0:
                                     _log(f"yt-dlp error (code {result.returncode}): {result.stderr[:200]}")
@@ -262,22 +495,126 @@ def main(event=None, context=None):
                 # Diagnostic step: attempt a CLI run with verbose output to capture errors
                 try:
                     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-                    diag_cmd = [
-                        os.environ.get('YT_DLP_PATH', 'yt-dlp'),
-                        youtube_url,
-                        "--no-cache-dir",
-                        "--no-check-certificate",
-                        "--dump-single-json",
-                        "--no-playlist",
-                        "-f",
-                        "best[ext=mp4]/best",
-                        "-v"
-                    ]
-                    _log(f"Running diagnostic command: {' '.join(diag_cmd)}")
-                    proc = subprocess.run(diag_cmd, capture_output=True, text=True, timeout=int(os.environ.get('REQUEST_TIMEOUT', '45')))
+                    import shutil, sys as _sys
+                    # Prefer a found binary (from YT_DLP_PATH or PATH); otherwise use `python -m yt_dlp`
+                    binary_candidate = shutil.which(os.environ.get('YT_DLP_PATH', 'yt-dlp'))
+                    if binary_candidate:
+                        diag_cmd = [
+                            binary_candidate,
+                            youtube_url,
+                            "--no-cache-dir",
+                            "--no-check-certificate",
+                            "--dump-single-json",
+                            "--no-playlist",
+                            "-f",
+                            "best[ext=mp4]/best",
+                            "-v"
+                        ]
+                        _log(f"Running diagnostic command (binary): {' '.join(diag_cmd)}")
+                    else:
+                        diag_cmd = [
+                            _sys.executable, '-m', 'yt_dlp',
+                            youtube_url,
+                            "--no-cache-dir",
+                            "--no-check-certificate",
+                            "--dump-single-json",
+                            "--no-playlist",
+                            "-f",
+                            "best[ext=mp4]/best",
+                            "-v"
+                        ]
+                        _log(f"Running diagnostic command (python -m yt_dlp): {_sys.executable} -m yt_dlp")
+                    
+                    # Check for Deno JS runtime - attempt to get or download
+                    deno_path = None
+                    try:
+                        # Try importing ensure_deno from serverless_handler_local
+                        try:
+                            from serverless_handler_local import ensure_deno
+                            deno_path = ensure_deno()
+                        except ImportError:
+                            # Fallback: check common locations only (no download)
+                            deno_candidates = [
+                                os.path.join(os.path.dirname(__file__), 'vendor', 'bin', 'deno'),
+                                '/tmp/vendor/bin/deno',
+                                os.path.join(os.getcwd(), 'vendor', 'bin', 'deno'),
+                                '/tmp/deno/deno'
+                            ]
+                            for candidate in deno_candidates:
+                                if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                                    deno_path = candidate
+                                    break
+                            if not deno_path:
+                                import shutil
+                                deno_path = shutil.which('deno')
+                    except Exception as de:
+                        _log(f'Error checking for Deno: {de}')
+
+                    if deno_path:
+                        diag_cmd.extend(['--js-runtimes', f'deno:{deno_path}'])
+                        _log(f'🦕 Diagnostic using Deno: {deno_path}')
+                    else:
+                        _log('⚠️ No Deno runtime for diagnostic')
+                    
+                    # Add cookies if available - check local package directory first
+                    _pkg_dir = os.path.dirname(os.path.abspath(__file__))
+                    _local_cookies = os.path.join(_pkg_dir, 'cookies.txt')
+                    if os.path.exists(_local_cookies):
+                        cookies_path = _local_cookies
+                    else:
+                        cookies_path = os.environ.get('COOKIES_FILE', '/tmp/cookies.txt')
+                    if os.path.exists(cookies_path):
+                        diag_cmd.extend(["--cookies", cookies_path])
+                        _log(f"✅ Diagnostic using cookies: {cookies_path}")
+                    else:
+                        _log(f"⚠️ No cookies for diagnostic: {cookies_path}")
+                    
+                    env = os.environ.copy()
+                    existing_pp = env.get('PYTHONPATH', '')
+                    vendor_paths = []
+                    for p in ['/tmp/vendor', '/tmp/vendor/lib/python3.11/site-packages', '/tmp/.local/lib/python3.11/site-packages']:
+                        try:
+                            if os.path.isdir(p):
+                                vendor_paths.append(p)
+                        except Exception:
+                            continue
+                    new_pp = os.pathsep.join(vendor_paths) if vendor_paths else ''
+                    if new_pp and existing_pp:
+                        env['PYTHONPATH'] = new_pp + os.pathsep + existing_pp
+                    elif new_pp:
+                        env['PYTHONPATH'] = new_pp
+                    else:
+                        env['PYTHONPATH'] = existing_pp
+
+                    proc = subprocess.run(diag_cmd, capture_output=True, text=True, timeout=int(os.environ.get('REQUEST_TIMEOUT', '45')), env=env)
                     stderr = proc.stderr or ''
                     stdout = proc.stdout or ''
                     _log(f"Diagnostic rc={proc.returncode} stderr={(stderr[:300]).replace(chr(10),' ')}")
+                    
+                    # Parse stderr for common YouTube protection patterns and provide helpful messages
+                    error_msg = "Failed to extract stream"
+                    error_reason = None
+                    stderr_lower = stderr.lower()
+                    
+                    # Check if cookies were found to provide more context
+                    cookies_found = 'found youtube account cookies' in stderr_lower
+                    
+                    if 'signature solving failed' in stderr_lower or 'n challenge solving' in stderr_lower:
+                        if cookies_found:
+                            error_reason = "Video requires JavaScript runtime for signature solving (cookies loaded successfully but JS runtime unavailable). Try a different video or enable JS runtime support."
+                        else:
+                            error_reason = "YouTube signature solving requires a JavaScript runtime (deno/node/bun/quickjs) which is not available on this serverless environment."
+                    elif 'login_required' in stderr_lower or 'sign in to confirm' in stderr_lower:
+                        error_reason = "YouTube requires authentication/cookies for this video. This video may be age-restricted or region-locked."
+                    elif 'no supported javascript runtime' in stderr_lower or 'js runtimes: none' in stderr_lower:
+                        error_reason = "YouTube extraction requires a JavaScript runtime (deno/node/bun/quickjs) which is not available on this serverless environment."
+                    elif 'members-only content' in stderr_lower:
+                        error_reason = "This video is members-only and requires channel membership."
+                    elif 'video unavailable' in stderr_lower or 'this video is unavailable' in stderr_lower:
+                        error_reason = "Video is unavailable (may be private, deleted, or region-restricted)."
+                    elif proc.returncode != 0 and not stdout.strip():
+                        error_reason = "yt-dlp extraction failed. Check diagnostic stderr for details."
+                    
                     # Include any Python import error in the diagnostic if present
                     py_import_err = None
                     try:
@@ -285,16 +622,24 @@ def main(event=None, context=None):
                         py_import_err = getattr(_shl, 'PY_IMPORT_ERROR', None)
                     except Exception as e:
                         py_import_err = f'import error reading PY_IMPORT_ERROR: {e}'
+                    
                     diagnostic = {"rc": proc.returncode, "stderr": stderr[:2000], "stdout_sample": stdout[:2000]}
                     if py_import_err:
                         diagnostic['python_import_error'] = py_import_err
-                    return {"body": {"error": "Failed to extract stream", "diagnostic": diagnostic}, "statusCode": 500}
+                    
+                    body = {"error": error_msg, "diagnostic": diagnostic}
+                    if error_reason:
+                        body['reason'] = error_reason
+                    
+                    return {"body": body, "statusCode": 500}
                 except Exception as de:
                     _log(f'Diagnostic run failed: {de}')
                     return {"body": {"error": "Failed to extract stream", "diagnostic_error": str(de)}, "statusCode": 500}
         except Exception as e:
-            _log(f'extraction error: {e}')
-            return {"body": {"error": str(e)}, "statusCode": 500}
+            import traceback
+            tb = traceback.format_exc()
+            _log(f'extraction error: {e} -- trace: {tb}')
+            return {"body": {"error": str(e), "type": type(e).__name__, "traceback": tb}, "statusCode": 500}
 
     # Direct ytdlp endpoint: /ytdlp?id={videoId}
     if path == '/ytdlp':

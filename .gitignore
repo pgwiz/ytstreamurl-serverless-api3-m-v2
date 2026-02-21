@@ -6,3 +6,7 @@ yt_ai_doc.md
 *-player-script.js
 __pycache__/
 *.pyc
+
+# Cookies (sensitive auth data - never commit)
+cookies.txt
+**/cookies.txt

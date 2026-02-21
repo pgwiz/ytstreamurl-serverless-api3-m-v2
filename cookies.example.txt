@@ -1,0 +1,15 @@
+# Netscape HTTP Cookie File
+# This is a generated file! Do not edit.
+# To use YouTube cookies:
+# 1. Install a browser extension like "Get cookies.txt LOCALLY" (Chrome/Firefox)
+# 2. Go to youtube.com and make sure you're logged in
+# 3. Click the extension icon and export cookies
+# 4. Save the exported cookies as cookies.txt
+# 5. Upload to /tmp/cookies.txt on the server (or set COOKIES_FILE env var)
+#
+# Cookie format (tab-separated):
+# domain	flag	path	secure	expiration	name	value
+#
+# Example (replace with your actual cookies):
+# .youtube.com	TRUE	/	TRUE	1234567890	CONSENT	YES+cb
+# .youtube.com	TRUE	/	FALSE	1234567890	PREF	f1=50000000
