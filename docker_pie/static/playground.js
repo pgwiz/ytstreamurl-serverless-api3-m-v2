@@ -101,6 +101,16 @@ function extractStream() {
             if (data.title) {
                 // Success
                 const streamUrl = data.url;
+                const proxyUrl = `${API_BASE}/api/proxy/${videoId}`;
+                
+                // Store current video info for download
+                window.currentVideoInfo = {
+                    videoId: videoId,
+                    title: data.title,
+                    url: streamUrl,
+                    proxyUrl: proxyUrl
+                };
+                
                 infoDiv.innerHTML = `
                     <div class="space-y-3">
                         <h3 class="text-lg font-bold text-green-400">✅ Stream Extracted!</h3>
@@ -111,16 +121,19 @@ function extractStream() {
                             <p><strong>Format:</strong> ${data.ext.toUpperCase()}</p>
                         </div>
                         <div class="mt-4 space-y-2">
-                            <p class="text-xs text-gray-400">Stream URL:</p>
+                            <p class="text-xs text-gray-400">Stream URL (Direct):</p>
                             <div class="bg-gray-900 p-3 rounded border border-gray-700">
-                                <p class="text-xs break-all font-mono text-blue-300">${streamUrl.substring(0, 100)}...</p>
+                                <p class="text-xs break-all font-mono text-blue-300">${streamUrl.substring(0, 80)}...</p>
                             </div>
                             <div class="flex gap-2">
                                 <button onclick="copyStreamUrl('${streamUrl}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs font-bold transition">
                                     📋 Copy URL
                                 </button>
-                                <button onclick="playStream('${streamUrl}', '${data.title}')" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-bold transition">
-                                    ▶️ Play
+                                <button onclick="playStreamProxy('${proxyUrl}', '${data.title}')" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-bold transition">
+                                    ▶️ Play (Proxy)
+                                </button>
+                                <button onclick="playStream('${streamUrl}', '${data.title}')" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-1 px-2 rounded text-xs font-bold transition">
+                                    ▶️ Play (Direct)
                                 </button>
                             </div>
                         </div>
@@ -174,6 +187,43 @@ function playStream(url, title) {
     const blob = new Blob([playerHtml], { type: 'text/html' });
     const playerUrl = URL.createObjectURL(blob);
     window.open(playerUrl, 'player', 'width=1000,height=600');
+}
+
+function playStreamProxy(proxyUrl, title) {
+    // Play through server proxy
+    const playerPanel = document.getElementById('playerPanel');
+    const videoSource = document.getElementById('videoSource');
+    const videoPlayer = document.getElementById('videoPlayer');
+    
+    playerPanel.classList.remove('hidden');
+    videoSource.src = proxyUrl;
+    videoPlayer.load();
+    videoPlayer.play();
+}
+
+function downloadVideo() {
+    if (!window.currentVideoInfo) {
+        alert('No video selected');
+        return;
+    }
+    
+    const { title, url } = window.currentVideoInfo;
+    const filename = `${title.replace(/[^\w\s-]/g, '')}.mp4`;
+    
+    // Create a hidden anchor element and trigger download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    alert(`⬇️ Download started for: ${title}`);
+}
+
+function closePlayer() {
+    document.getElementById('playerPanel').classList.add('hidden');
+    document.getElementById('videoPlayer').pause();
 }
 
 function formatDuration(seconds) {

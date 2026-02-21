@@ -50,6 +50,25 @@
             </div>
         </div>
 
+        <!-- Video Player Panel -->
+        <div class="glass-panel p-6 rounded-2xl shadow-xl mt-6 hidden" id="playerPanel">
+            <h2 class="text-xl font-bold mb-4 text-green-400">🎥 Video Player</h2>
+            <div class="space-y-3">
+                <video id="videoPlayer" controls class="w-full bg-black rounded-lg" style="max-height: 400px;">
+                    <source id="videoSource" src="" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="flex gap-2">
+                    <button onclick="downloadVideo()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                        ⬇️ Download Video
+                    </button>
+                    <button onclick="closePlayer()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                        ✕ Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Status Panel -->
         <div class="glass-panel p-6 rounded-2xl shadow-xl mt-6">
             <h2 class="text-xl font-bold mb-4 text-green-400">ℹ️ API Status</h2>

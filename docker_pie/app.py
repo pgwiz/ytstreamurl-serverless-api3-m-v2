@@ -9,6 +9,7 @@ import json
 import subprocess
 import shutil
 import tempfile
+import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, render_template_string
 from urllib.parse import quote
@@ -262,6 +263,39 @@ def get_stream(video_id):
             'video_id': video_id,
             'reason': 'Video may be unavailable, require authentication, or need JavaScript runtime support'
         }), 400
+
+@app.route('/api/proxy/<video_id>')
+def proxy_stream(video_id):
+    """Proxy YouTube stream through server (for CORS and playback support)"""
+    if not video_id or len(video_id) < 10:
+        return jsonify({'error': 'Invalid video ID'}), 400
+    
+    try:
+        # Extract stream URL
+        result = extract_youtube_stream(video_id)
+        
+        if not result or not result.get('url'):
+            return jsonify({'error': 'Failed to extract stream'}), 400
+        
+        stream_url = result['url']
+        
+        # Fetch the stream from YouTube
+        response = requests.get(stream_url, stream=True, timeout=30)
+        
+        if response.status_code != 200:
+            return jsonify({'error': 'Failed to fetch stream from YouTube'}), 502
+        
+        # Return as streaming response
+        return response.content, 200, {
+            'Content-Type': response.headers.get('content-type', 'video/mp4'),
+            'Content-Length': response.headers.get('content-length', ''),
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*'
+        }
+    except Exception as e:
+        log(f'❌ Proxy error: {str(e)}')
+        return jsonify({'error': 'Proxy failed', 'message': str(e)}), 500
 
 @app.route('/api/search/youtube')
 def search():
