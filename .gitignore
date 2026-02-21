@@ -8,6 +8,8 @@ __pycache__/
 *.pyc
 
 # Cookies (sensitive auth data - never commit)
+# EXCEPT: docker_pie/cookies.txt is needed for Docker builds
 cookies.txt
 **/cookies.txt
+!/docker_pie/cookies.txt
 .venv/
