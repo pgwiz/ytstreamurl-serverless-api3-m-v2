@@ -389,8 +389,10 @@ def status():
     cookies_path = extractor.get_cookie_file_path()
     cookies_available = bool(cookies_path)
     
-    # Check if running on Docker (can be set via DOCKER=true env var)
-    is_docker = os.environ.get('DOCKER', '').lower() in ['true', '1', 'yes']
+    # Default to true if running in Docker (DOCKER env var or always true for docker_pie)
+    # Can be set explicitly via DOCKER=false for testing
+    is_docker_var = os.environ.get('DOCKER', '').lower()
+    is_docker = True if is_docker_var != 'false' else False  # Default true, opt-out with DOCKER=false
     
     return jsonify({
         'service': 'YouTube Stream Extractor API',

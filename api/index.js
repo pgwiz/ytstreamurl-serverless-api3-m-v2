@@ -902,10 +902,17 @@ const streamHandler = async (req, res) => {
 
                 if (doResponse.ok && doBody && doBody.url) {
                     console.log(`✅ Got stream from DO for ${videoId}`);
+                    // Return response with proxy URL for Docker deployments
+                    const directUrl = doBody.url;
+                    const encodedUrl = Buffer.from(directUrl).toString('base64');
+                    const proxyUrl = `/stream/play?url=${encodedUrl}`;
+                    
                     return res.json({
                         videoId,
                         streamUrl: doBody.url,
                         url: doBody.url, // Include both for compatibility
+                        proxy_url: proxyUrl,
+                        proxy_url_encoded: encodedUrl,
                         title: doBody.title || 'Unknown',
                         uploader: doBody.uploader || 'Unknown',
                         duration: doBody.duration || 'Unknown',
@@ -933,10 +940,17 @@ const streamHandler = async (req, res) => {
         if (result && result.tracks && result.tracks.length > 0) {
             const track = result.tracks[0];
             if (track && track.url) {
+                // Add proxy URL for Docker deployments
+                const directUrl = track.url;
+                const encodedUrl = Buffer.from(directUrl).toString('base64');
+                const proxyUrl = `/stream/play?url=${encodedUrl}`;
+                
                 return res.json({
                     videoId,
                     streamUrl: track.url,
                     url: track.url,
+                    proxy_url: proxyUrl,
+                    proxy_url_encoded: encodedUrl,
                     title: track.title || 'Unknown',
                     uploader: track.uploader || 'Unknown',
                     duration: track.duration || 'Unknown',

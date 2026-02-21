@@ -220,10 +220,24 @@ async function fetchAndPlay(item) {
             // Support both old (streamUrl) and new (url) field names
             const directUrl = data.streamUrl || data.url;
             
-            // Use proxy URL if available and on Docker deployment
-            const playUrl = (isDockerDeployment && data.proxy_url) 
-                ? window.location.origin + data.proxy_url 
-                : directUrl;
+            // When on Docker deployment, ALWAYS use proxy URL for reliability
+            let playUrl;
+            if (isDockerDeployment) {
+                // Use backend's proxy_url if available, otherwise construct client-side
+                if (data.proxy_url) {
+                    playUrl = window.location.origin + data.proxy_url;
+                    log(`🔗 Using server proxy URL for streaming`);
+                } else {
+                    // Fallback: construct proxy URL client-side from direct URL
+                    const encoded = btoa(directUrl);
+                    playUrl = window.location.origin + `/stream/play?url=${encoded}`;
+                    log(`🔗 Constructed proxy URL client-side for streaming`);
+                }
+            } else {
+                // On Vercel, use direct URL
+                playUrl = directUrl;
+                log(`📡 Using direct YouTube URL`);
+            }
             
             playTrack({
                 title: item.title || item.name,
@@ -237,7 +251,7 @@ async function fetchAndPlay(item) {
                 isLive: data.isLive
             });
             
-            const streamMethod = (isDockerDeployment && data.proxy_url) ? 'proxy' : 'direct';
+            const streamMethod = isDockerDeployment ? 'proxy' : 'direct';
             log(`Success! Playing: ${item.name || item.title} [${data.ext || 'mp4'}] (${streamMethod})`);
         } else {
             log('Failed to get stream URL');
