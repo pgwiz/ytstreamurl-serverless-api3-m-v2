@@ -868,8 +868,8 @@ app.get('/get', async (req, res) => {
     }
 });
 
-// Stream by Video ID
-app.get('/stream/:videoId', async (req, res) => {
+// Stream by Video ID - Handle both GET and POST
+const streamHandler = async (req, res) => {
     const { videoId } = req.params;
 
     try {
@@ -936,6 +936,7 @@ app.get('/stream/:videoId', async (req, res) => {
                 return res.json({
                     videoId,
                     streamUrl: track.url,
+                    url: track.url,
                     title: track.title || 'Unknown',
                     uploader: track.uploader || 'Unknown',
                     duration: track.duration || 'Unknown',
@@ -948,6 +949,12 @@ app.get('/stream/:videoId', async (req, res) => {
     } catch (error) {
         console.error(`Stream URL error for ${videoId}:`, error);
         res.status(500).json({ error: error.message });
+    }
+};
+
+// Support both GET and POST
+app.get('/stream/:videoId', streamHandler);
+app.post('/stream/:videoId', streamHandler);
     }
 });
 
@@ -1044,6 +1051,19 @@ app.get('/api/info', (req, res) => {
             }
         },
         spotify_configured: !!(SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_SECRET)
+    });
+});
+
+// API Status (deployment info)
+app.get('/api/status', (req, res) => {
+    res.json({
+        service: 'YouTube Stream Extractor API',
+        version: '3.1.0',
+        docker: false,
+        deployment: 'vercel',
+        node_js: true,
+        spotify_configured: !!(SPOTIFY_CLIENT_ID && SPOTIFY_CLIENT_SECRET),
+        timestamp: new Date().toISOString()
     });
 });
 

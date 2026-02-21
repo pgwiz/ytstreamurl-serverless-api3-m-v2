@@ -389,6 +389,9 @@ def status():
     cookies_path = extractor.get_cookie_file_path()
     cookies_available = bool(cookies_path)
     
+    # Check if running on Docker (can be set via DOCKER=true env var)
+    is_docker = os.environ.get('DOCKER', '').lower() in ['true', '1', 'yes']
+    
     return jsonify({
         'service': 'YouTube Stream Extractor API',
         'version': '1.0.0',
@@ -397,7 +400,9 @@ def status():
         'cookies_path': cookies_path or 'Not found',
         'log_dir': LOG_DIR,
         'timeout': extractor.timeout,
-        'port': PORT
+        'port': PORT,
+        'deployment': 'docker' if is_docker else 'vercel',
+        'docker': is_docker
     })
 
 @app.route('/static/<path:filename>')

@@ -1,14 +1,43 @@
 // State
 let currentMode = 'youtube';
 let libraryMode = false;
-let isDockerDeployment = false; // Detect Docker deployment
+let isDockerDeployment = false; // Detect Docker deployment via API
+let deploymentCached = false; // Cache flag to reduce latency
 
-// Detect if running on Docker/Koyeb by checking if proxy_url is available
-function detectEnvironment() {
+// Detect deployment type from API status endpoint (with caching)
+async function detectEnvironment() {
+    // Skip if already detected or if hostname suggests Digital Ocean
+    if (deploymentCached) return;
+    
     const hostname = window.location.hostname;
-    // Docker deployments typically use koyeb.app or custom domains with /stream/play endpoints
-    isDockerDeployment = hostname.includes('koyeb') || hostname.includes('render') || hostname.includes('herokuapp');
-    console.log(`[ENV] Docker Deployment: ${isDockerDeployment}`);
+    const isDO = hostname.includes('app.do') || hostname.includes('.do.digitalocean') || hostname.includes('digitalocean');
+    
+    if (isDO) {
+        isDockerDeployment = true; // Digital Ocean is Docker-based
+        console.log('[ENV] Digital Ocean detected - using proxy URLs');
+        deploymentCached = true;
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/status?_t=' + Date.now(), {
+            signal: AbortSignal.timeout(2000) // 2-second timeout
+        });
+        if (response.ok) {
+            const data = await response.json();
+            isDockerDeployment = data.docker === true || data.deployment === 'docker';
+            console.log(`[ENV] Deployment Type: ${data.deployment} (Docker: ${isDockerDeployment})`);
+            log(`🔧 Deployment: ${data.deployment.toUpperCase()} ${isDockerDeployment ? '(Proxy URLs enabled)' : '(Direct URLs)'}`);
+        } else {
+            console.log('[ENV] Could not detect deployment - assuming Vercel');
+            isDockerDeployment = false;
+        }
+    } catch (e) {
+        console.log(`[ENV] Error detecting environment (${e.message}) - assuming Vercel`);
+        isDockerDeployment = false;
+    } finally {
+        deploymentCached = true; // Mark as cached to avoid repeat checks
+    }
 }
 
 // DOM Elements
@@ -385,8 +414,10 @@ function renderResults(results) {
 }
 
 // Initial Setup
-detectEnvironment();
-log(`Playground initialized. Ready for requests. [${isDockerDeployment ? 'Docker' : 'Vercel'}]`);
-if (isDockerDeployment) {
-    log('✅ Proxy URL support enabled - videos will stream through server');
-}
+document.addEventListener('DOMContentLoaded', async function() {
+    await detectEnvironment();
+    log(`Playground initialized. Ready for requests. [${isDockerDeployment ? 'Docker' : 'Vercel'}]`);
+    if (isDockerDeployment) {
+        log('✅ Proxy URL support enabled - videos will stream through server');
+    }
+});
