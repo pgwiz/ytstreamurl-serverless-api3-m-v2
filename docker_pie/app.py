@@ -250,14 +250,46 @@ def health():
 
 @app.route('/api/stream/<video_id>')
 def get_stream(video_id):
-    """Extract YouTube stream URL"""
+    """Extract YouTube stream URL (GET)"""
     if not video_id or len(video_id) < 10:
         return jsonify({'error': 'Invalid video ID'}), 400
     
     result = extract_youtube_stream(video_id)
     
     if result:
+        # Add encoded proxy URL for server-side streaming
+        stream_url = result.get('url', '')
+        if stream_url:
+            encoded_url = base64.b64encode(stream_url.encode()).decode()
+            result['proxy_url'] = f"/stream/play?url={encoded_url}"
+            result['proxy_url_encoded'] = encoded_url
+        
         return jsonify(result)
+    else:
+        return jsonify({
+            'error': 'Failed to extract stream',
+            'video_id': video_id,
+            'reason': 'Video may be unavailable, require authentication, or need JavaScript runtime support'
+        }), 400
+
+@app.route('/stream/<video_id>', methods=['POST'])
+def post_stream(video_id):
+    """Extract YouTube stream URL and return with encoded proxy URL (POST)"""
+    if not video_id or len(video_id) < 10:
+        return jsonify({'error': 'Invalid video ID'}), 400
+    
+    result = extract_youtube_stream(video_id)
+    
+    if result:
+        # Add encoded proxy URL for server-side streaming
+        stream_url = result.get('url', '')
+        if stream_url:
+            encoded_url = base64.b64encode(stream_url.encode()).decode()
+            result['proxy_url'] = f"/stream/play?url={encoded_url}"
+            result['proxy_url_encoded'] = encoded_url
+            result['message'] = f"Video extracted successfully. Use proxy_url for server-side streaming."
+        
+        return jsonify(result), 200
     else:
         return jsonify({
             'error': 'Failed to extract stream',

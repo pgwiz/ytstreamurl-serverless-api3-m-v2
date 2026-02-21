@@ -197,28 +197,15 @@ function playStream(url, title) {
     window.open(playerUrl, 'player', 'width=1000,height=600');
 }
 
-function copyProxyUrl() {
-    if (!window.currentVideoInfo || !window.currentVideoInfo.proxyUrl) {
-        alert('No proxy URL available');
-        return;
-    }
-    
-    navigator.clipboard.writeText(window.currentVideoInfo.proxyUrl).then(() => {
-        alert('✅ Proxy URL copied! You can share this link:\n\n' + window.currentVideoInfo.proxyUrl);
-    }).catch(() => {
-        alert('❌ Failed to copy URL');
-    });
-}
-
 function playStreamProxy() {
-    if (!window.currentVideoInfo || !window.currentVideoInfo.proxyUrl) {
-        alert('No stream extracted');
+    if (!window.currentVideoInfo) {
+        alert('No video selected');
         return;
     }
     
-    const { title, proxyUrl } = window.currentVideoInfo;
+    const { proxyUrl, title } = window.currentVideoInfo;
     
-    // Play through server proxy in embedded player
+    // Play through server proxy
     const playerPanel = document.getElementById('playerPanel');
     const videoSource = document.getElementById('videoSource');
     const videoPlayer = document.getElementById('videoPlayer');
@@ -235,18 +222,21 @@ function downloadVideo() {
         return;
     }
     
-    const { title, url } = window.currentVideoInfo;
+    const { title, proxyUrl } = window.currentVideoInfo;
     const filename = `${title.replace(/[^\w\s-]/g, '')}.mp4`;
+    
+    // Use proxy URL for download (goes through server)
+    const downloadUrl = proxyUrl || window.currentVideoInfo.url;
     
     // Create a hidden anchor element and trigger download
     const a = document.createElement('a');
-    a.href = url;
+    a.href = downloadUrl;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     
-    alert(`⬇️ Download started for: ${title}`);
+    alert(`⬇️ Download started for: ${title}\n📡 Using proxy URL for download`);
 }
 
 function closePlayer() {
