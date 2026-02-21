@@ -32,6 +32,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY app.py .
+COPY youtube_extractor.py .
 COPY static ./static/
 
 # Copy cookies if available - try both locations
