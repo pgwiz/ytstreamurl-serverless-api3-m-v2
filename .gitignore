@@ -10,3 +10,4 @@ __pycache__/
 # Cookies (sensitive auth data - never commit)
 cookies.txt
 **/cookies.txt
+.venv/
