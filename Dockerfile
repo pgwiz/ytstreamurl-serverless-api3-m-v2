@@ -1,10 +1,13 @@
 # Root-level Dockerfile that builds from docker_pie folder
 # Usage: docker build -f Dockerfile -t youtube-stream-api .
-# Build date: 2026-02-22 (root Dockerfile with proper Node.js and cookies support)
+# Build ID: 2026-02-22-22-30-Z-INLINED-APP-NO-IMPORTS-CACHE-BUST-12345
 
 FROM python:3.11-slim
 
 WORKDIR /app
+
+# Force cache bust with unique marker
+RUN echo "Build: inlined app.py with no external imports requirement"
 
 # Install system dependencies including Node.js for yt-dlp JavaScript runtime
 # Use NodeSource official repo for better compatibility
