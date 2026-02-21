@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import { LRUCache } from 'lru-cache';
 import ytdl from '@distube/ytdl-core';
 import ytpl from '@distube/ytpl';
@@ -21,6 +22,13 @@ const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
 const mediaCache = new LRUCache({
     max: 128,
     ttl: 1000 * 60 * 30 // 30 minutes
+});
+
+// URL Cache for proxy streaming (maps short ID -> full URL)
+// Reduces proxy URL length from 2000+ chars to ~50 chars
+const urlCache = new LRUCache({
+    max: 256,
+    ttl: 1000 * 60 * 60 // 1 hour
 });
 
 // Spotify token cache
@@ -66,6 +74,14 @@ function parseNetscapeCookies(content) {
         }
     }
     return cookies;
+}
+
+// Cache stream URL and return short ID
+function cacheStreamUrl(url) {
+    // Create short hash-based ID from URL
+    const urlHash = crypto.createHash('md5').update(url).digest('hex').substring(0, 12);
+    urlCache.set(urlHash, url);
+    return urlHash;
 }
 
 // ---------------------------------------------------------
@@ -902,17 +918,17 @@ const streamHandler = async (req, res) => {
 
                 if (doResponse.ok && doBody && doBody.url) {
                     console.log(`✅ Got stream from DO for ${videoId}`);
-                    // Return response with proxy URL for Docker deployments
+                    // Use cached short ID instead of full base64 encoding
                     const directUrl = doBody.url;
-                    const encodedUrl = Buffer.from(directUrl).toString('base64');
-                    const proxyUrl = `/stream/play?url=${encodedUrl}`;
+                    const cacheId = cacheStreamUrl(directUrl);
+                    const proxyUrl = `/stream/play?id=${cacheId}`;
                     
                     return res.json({
                         videoId,
                         streamUrl: doBody.url,
                         url: doBody.url, // Include both for compatibility
                         proxy_url: proxyUrl,
-                        proxy_url_encoded: encodedUrl,
+                        cache_id: cacheId,
                         title: doBody.title || 'Unknown',
                         uploader: doBody.uploader || 'Unknown',
                         duration: doBody.duration || 'Unknown',
@@ -940,17 +956,17 @@ const streamHandler = async (req, res) => {
         if (result && result.tracks && result.tracks.length > 0) {
             const track = result.tracks[0];
             if (track && track.url) {
-                // Add proxy URL for Docker deployments
+                // Use cached short ID instead of full base64 encoding
                 const directUrl = track.url;
-                const encodedUrl = Buffer.from(directUrl).toString('base64');
-                const proxyUrl = `/stream/play?url=${encodedUrl}`;
+                const cacheId = cacheStreamUrl(directUrl);
+                const proxyUrl = `/stream/play?id=${cacheId}`;
                 
                 return res.json({
                     videoId,
                     streamUrl: track.url,
                     url: track.url,
                     proxy_url: proxyUrl,
-                    proxy_url_encoded: encodedUrl,
+                    cache_id: cacheId,
                     title: track.title || 'Unknown',
                     uploader: track.uploader || 'Unknown',
                     duration: track.duration || 'Unknown',
@@ -969,6 +985,63 @@ const streamHandler = async (req, res) => {
 // Support both GET and POST
 app.get('/stream/:videoId', streamHandler);
 app.post('/stream/:videoId', streamHandler);
+
+// Stream Proxy Streaming Endpoint (for caching and Docker deployments)
+app.get('/stream/play', async (req, res) => {
+    const cacheId = req.query.id;
+    let streamUrl = null;
+    
+    // Try cache ID first (shortest URL)
+    if (cacheId) {
+        streamUrl = urlCache.get(cacheId);
+        if (!streamUrl) {
+            return res.status(404).json({ error: `Cache ID not found: ${cacheId}` });
+        }
+        console.log(`✅ Found stream URL in cache (ID: ${cacheId})`);
+    } else {
+        // Fall back to encoded URL parameter (for backward compatibility)
+        const encodedUrl = req.query.url;
+        if (!encodedUrl) {
+            return res.status(400).json({ error: 'Missing id or url parameter' });
+        }
+        
+        try {
+            // Decode the stream URL
+            streamUrl = Buffer.from(encodedUrl, 'base64').toString('utf-8');
+        } catch (e) {
+            return res.status(400).json({ error: `Decode error: ${e.message}` });
+        }
+    }
+    
+    try {
+        console.log(`🔄 Proxying stream: ${streamUrl.substring(0, 80)}...`);
+        const response = await fetch(streamUrl, {
+            headers: { 'Range': req.headers.range || '' }
+        });
+        
+        if (!response.ok) {
+            console.error(`❌ Stream error: ${response.status}`);
+            return res.status(502).json({ error: `Stream error: ${response.status}` });
+        }
+        
+        // Copy headers
+        const contentType = response.headers.get('content-type');
+        const contentLength = response.headers.get('content-length');
+        if (contentType) res.set('Content-Type', contentType);
+        if (contentLength) res.set('Content-Length', contentLength);
+        
+        res.set({
+            'Cache-Control': 'public, max-age=3600',
+            'Access-Control-Allow-Origin': '*'
+        });
+        
+        console.log(`✅ Streaming video...`);
+        response.body.pipe(res);
+    } catch (error) {
+        console.error(`❌ Proxy error: ${error.message}`);
+        res.status(500).json({ error: `Proxy failed: ${error.message}` });
+    }
+});
 
 // YouTube Search
 app.get('/api/search/youtube', async (req, res) => {

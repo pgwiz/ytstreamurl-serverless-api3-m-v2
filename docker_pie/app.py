@@ -11,11 +11,16 @@ import shutil
 import tempfile
 import requests
 import base64
+import hashlib
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, render_template_string
 from urllib.parse import quote, unquote
 
 app = Flask(__name__, static_url_path='/static', static_folder='static')
+
+# URL Cache for proxy streaming (maps short ID -> full URL)
+# Reduces proxy URL length from 2000+ chars to ~50 chars
+url_cache = {}
 
 # ===== INLINE: YoutubeExtractor Class =====
 class YoutubeExtractor:
@@ -238,6 +243,15 @@ def search_youtube(query, limit=5):
     """Proxy to extractor"""
     return extractor.search_youtube(query, limit=limit)
 
+def cache_stream_url(url):
+    """Cache a stream URL and return short ID instead of encoding full URL
+    Returns: cache_id (e.g. 'abc123def456')
+    """
+    # Create short hash-based ID from URL
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+    url_cache[url_hash] = url
+    return url_hash
+
 @app.route('/')
 def index():
     """Serve the playground UI"""
@@ -257,12 +271,12 @@ def get_stream(video_id):
     result = extract_youtube_stream(video_id)
     
     if result:
-        # Add encoded proxy URL for server-side streaming
+        # Use cached short ID instead of full base64 encoding
         stream_url = result.get('url', '')
         if stream_url:
-            encoded_url = base64.b64encode(stream_url.encode()).decode()
-            result['proxy_url'] = f"/stream/play?url={encoded_url}"
-            result['proxy_url_encoded'] = encoded_url
+            cache_id = cache_stream_url(stream_url)
+            result['proxy_url'] = f"/stream/play?id={cache_id}"
+            result['cache_id'] = cache_id
         
         return jsonify(result)
     else:
@@ -281,12 +295,12 @@ def stream_handler(video_id):
     result = extract_youtube_stream(video_id)
     
     if result:
-        # Add encoded proxy URL for server-side streaming
+        # Use cached short ID instead of full base64 encoding
         stream_url = result.get('url', '')
         if stream_url:
-            encoded_url = base64.b64encode(stream_url.encode()).decode()
-            result['proxy_url'] = f"/stream/play?url={encoded_url}"
-            result['proxy_url_encoded'] = encoded_url
+            cache_id = cache_stream_url(stream_url)
+            result['proxy_url'] = f"/stream/play?id={cache_id}"
+            result['cache_id'] = cache_id
             result['message'] = f"Video extracted successfully. Use proxy_url for server-side streaming."
         
         return jsonify(result), 200
@@ -327,23 +341,41 @@ def proxy_stream(video_id):
 
 @app.route('/stream/play')
 def stream_play():
-    """Proxy any stream URL through the server - streaming endpoint"""
-    stream_url = request.args.get('url')
-    if not stream_url:
-        return jsonify({'error': 'Missing url parameter'}), 400
+    """Proxy any stream URL through the server - streaming endpoint
+    Supports:
+    - ?id=<cache_id>  - Fast lookup from cache (recommended)
+    - ?url=<base64>   - Legacy base64-encoded URL (backward compatible)
+    """
+    stream_url = None
+    
+    # Try cache ID first (shortest URL)
+    cache_id = request.args.get('id')
+    if cache_id:
+        stream_url = url_cache.get(cache_id)
+        if not stream_url:
+            return jsonify({'error': f'Cache ID not found: {cache_id}'}), 404
+        log(f'✅ Found stream URL in cache (ID: {cache_id})')
+    else:
+        # Fall back to encoded URL parameter
+        encoded_url = request.args.get('url')
+        if not encoded_url:
+            return jsonify({'error': 'Missing id or url parameter'}), 400
+        
+        try:
+            # Decode the stream URL (could be base64 or URL-encoded)
+            try:
+                stream_url = base64.b64decode(encoded_url).decode('utf-8')
+            except:
+                try:
+                    stream_url = unquote(encoded_url)
+                except:
+                    stream_url = encoded_url
+        except Exception as e:
+            return jsonify({'error': f'Decode error: {str(e)}'}), 400
     
     try:
-        # Decode the stream URL (could be base64 or URL-encoded)
-        try:
-            decoded_url = base64.b64decode(stream_url).decode('utf-8')
-        except:
-            try:
-                decoded_url = unquote(stream_url)
-            except:
-                decoded_url = stream_url
-        
-        log(f'🔄 Proxying stream from: {decoded_url[:80]}...')
-        response = requests.get(decoded_url, stream=True, timeout=60)
+        log(f'🔄 Proxying stream from: {stream_url[:80]}...')
+        response = requests.get(stream_url, stream=True, timeout=60)
         
         if response.status_code != 200:
             log(f'❌ Stream error: {response.status_code}')
@@ -353,7 +385,6 @@ def stream_play():
         
         # Stream the response back to the client
         def generate():
-            for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     yield chunk
         

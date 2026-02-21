@@ -220,18 +220,17 @@ async function fetchAndPlay(item) {
             // Support both old (streamUrl) and new (url) field names
             const directUrl = data.streamUrl || data.url;
             
-            // When on Docker deployment, ALWAYS use proxy URL for reliability
+            // When on Docker deployment, use server proxy URL for reliability
             let playUrl;
             if (isDockerDeployment) {
-                // Use backend's proxy_url if available, otherwise construct client-side
+                // Use backend's cached proxy_url (much shorter than base64!)
                 if (data.proxy_url) {
                     playUrl = window.location.origin + data.proxy_url;
-                    log(`🔗 Using server proxy URL for streaming`);
+                    log(`🔗 Using cached proxy URL (ID: ${data.cache_id})`);
                 } else {
-                    // Fallback: construct proxy URL client-side from direct URL
-                    const encoded = btoa(directUrl);
-                    playUrl = window.location.origin + `/stream/play?url=${encoded}`;
-                    log(`🔗 Constructed proxy URL client-side for streaming`);
+                    // Fallback: direct URL if no proxy
+                    playUrl = directUrl;
+                    log(`📡 No cache ID available, using direct URL`);
                 }
             } else {
                 // On Vercel, use direct URL
@@ -248,7 +247,8 @@ async function fetchAndPlay(item) {
                 proxyUrl: data.proxy_url ? (window.location.origin + data.proxy_url) : null,
                 videoId: videoId,
                 ext: data.ext || 'mp4',
-                isLive: data.isLive
+                isLive: data.isLive,
+                cacheId: data.cache_id
             });
             
             const streamMethod = isDockerDeployment ? 'proxy' : 'direct';
