@@ -955,8 +955,6 @@ const streamHandler = async (req, res) => {
 // Support both GET and POST
 app.get('/stream/:videoId', streamHandler);
 app.post('/stream/:videoId', streamHandler);
-    }
-});
 
 // YouTube Search
 app.get('/api/search/youtube', async (req, res) => {
