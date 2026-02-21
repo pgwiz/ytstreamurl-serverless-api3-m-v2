@@ -146,7 +146,8 @@ class YoutubeExtractor:
             cmd = [
                 sys.executable, "-m", "yt_dlp", youtube_url,
                 '--no-cache-dir', '--no-check-certificate', '--dump-single-json',
-                '--no-playlist', '-f', 'best[ext=mp4][protocol^=http]/best[protocol^=http]'
+                '--no-playlist', '-f', 'best[ext=mp4][protocol^=http]/best[protocol^=http]',
+                '--remote-components', 'ejs:github'
             ]
             
             node_path = shutil.which('node')
