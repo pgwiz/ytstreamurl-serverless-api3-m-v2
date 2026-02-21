@@ -1,4 +1,5 @@
 # Multi-stage build for YouTube stream extraction API with playground UI
+# Build date: 2026-02-22 (force rebuild)
 FROM node:20-alpine AS js-base
 WORKDIR /app
 
