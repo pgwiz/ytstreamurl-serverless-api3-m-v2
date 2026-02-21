@@ -272,9 +272,9 @@ def get_stream(video_id):
             'reason': 'Video may be unavailable, require authentication, or need JavaScript runtime support'
         }), 400
 
-@app.route('/stream/<video_id>', methods=['POST'])
-def post_stream(video_id):
-    """Extract YouTube stream URL and return with encoded proxy URL (POST)"""
+@app.route('/stream/<video_id>', methods=['GET', 'POST'])
+def stream_handler(video_id):
+    """Extract YouTube stream URL (supports both GET and POST)"""
     if not video_id or len(video_id) < 10:
         return jsonify({'error': 'Invalid video ID'}), 400
     
