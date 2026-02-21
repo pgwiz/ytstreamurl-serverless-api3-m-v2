@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', function() {
     loadStoredValues();
 });
 
+// Base64 encoding utility
+function encodeBase64(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+}
+
 function loadStatus() {
     fetch(`${API_BASE}/api/status`)
         .then(res => res.json())
@@ -101,7 +106,7 @@ function extractStream() {
             if (data.title) {
                 // Success
                 const streamUrl = data.url;
-                const proxyUrl = `${API_BASE}/api/proxy/${videoId}`;
+                const proxyUrl = `${API_BASE}/stream/play?url=${encodeBase64(streamUrl)}`;
                 
                 // Store current video info for download
                 window.currentVideoInfo = {
@@ -121,19 +126,22 @@ function extractStream() {
                             <p><strong>Format:</strong> ${data.ext.toUpperCase()}</p>
                         </div>
                         <div class="mt-4 space-y-2">
-                            <p class="text-xs text-gray-400">Stream URL (Direct):</p>
+                            <p class="text-xs text-gray-400">🔗 Proxy Streaming URL (Share this):</p>
                             <div class="bg-gray-900 p-3 rounded border border-gray-700">
-                                <p class="text-xs break-all font-mono text-blue-300">${streamUrl.substring(0, 80)}...</p>
+                                <p class="text-xs break-all font-mono text-green-300">${proxyUrl}</p>
                             </div>
+                            <button onclick="copyProxyUrl()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded text-xs font-bold transition">
+                                📋 Copy Proxy URL
+                            </button>
+                        </div>
+                        <div class="mt-3 space-y-2 pt-3 border-t border-gray-700">
+                            <p class="text-xs text-gray-400">🎬 Playback Options:</p>
                             <div class="flex gap-2">
-                                <button onclick="copyStreamUrl('${streamUrl}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs font-bold transition">
-                                    📋 Copy URL
+                                <button onclick="playStreamProxy()" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-bold transition">
+                                    ▶️ Play
                                 </button>
-                                <button onclick="playStreamProxy('${proxyUrl}', '${data.title}')" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-bold transition">
-                                    ▶️ Play (Proxy)
-                                </button>
-                                <button onclick="playStream('${streamUrl}', '${data.title}')" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-1 px-2 rounded text-xs font-bold transition">
-                                    ▶️ Play (Direct)
+                                <button onclick="downloadVideo()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs font-bold transition">
+                                    ⬇️ Download
                                 </button>
                             </div>
                         </div>
@@ -189,8 +197,28 @@ function playStream(url, title) {
     window.open(playerUrl, 'player', 'width=1000,height=600');
 }
 
-function playStreamProxy(proxyUrl, title) {
-    // Play through server proxy
+function copyProxyUrl() {
+    if (!window.currentVideoInfo || !window.currentVideoInfo.proxyUrl) {
+        alert('No proxy URL available');
+        return;
+    }
+    
+    navigator.clipboard.writeText(window.currentVideoInfo.proxyUrl).then(() => {
+        alert('✅ Proxy URL copied! You can share this link:\n\n' + window.currentVideoInfo.proxyUrl);
+    }).catch(() => {
+        alert('❌ Failed to copy URL');
+    });
+}
+
+function playStreamProxy() {
+    if (!window.currentVideoInfo || !window.currentVideoInfo.proxyUrl) {
+        alert('No stream extracted');
+        return;
+    }
+    
+    const { title, proxyUrl } = window.currentVideoInfo;
+    
+    // Play through server proxy in embedded player
     const playerPanel = document.getElementById('playerPanel');
     const videoSource = document.getElementById('videoSource');
     const videoPlayer = document.getElementById('videoPlayer');

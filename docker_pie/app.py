@@ -10,9 +10,10 @@ import subprocess
 import shutil
 import tempfile
 import requests
+import base64
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, render_template_string
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 app = Flask(__name__, static_url_path='/static', static_folder='static')
 
@@ -266,26 +267,21 @@ def get_stream(video_id):
 
 @app.route('/api/proxy/<video_id>')
 def proxy_stream(video_id):
-    """Proxy YouTube stream through server (for CORS and playback support)"""
+    """Proxy YouTube stream through server (for CORS and playback support) - DEPRECATED"""
     if not video_id or len(video_id) < 10:
         return jsonify({'error': 'Invalid video ID'}), 400
     
     try:
-        # Extract stream URL
         result = extract_youtube_stream(video_id)
-        
         if not result or not result.get('url'):
             return jsonify({'error': 'Failed to extract stream'}), 400
         
         stream_url = result['url']
-        
-        # Fetch the stream from YouTube
         response = requests.get(stream_url, stream=True, timeout=30)
         
         if response.status_code != 200:
             return jsonify({'error': 'Failed to fetch stream from YouTube'}), 502
         
-        # Return as streaming response
         return response.content, 200, {
             'Content-Type': response.headers.get('content-type', 'video/mp4'),
             'Content-Length': response.headers.get('content-length', ''),
@@ -296,6 +292,49 @@ def proxy_stream(video_id):
     except Exception as e:
         log(f'❌ Proxy error: {str(e)}')
         return jsonify({'error': 'Proxy failed', 'message': str(e)}), 500
+
+@app.route('/stream/play')
+def stream_play():
+    """Proxy any stream URL through the server - streaming endpoint"""
+    stream_url = request.args.get('url')
+    if not stream_url:
+        return jsonify({'error': 'Missing url parameter'}), 400
+    
+    try:
+        # Decode the stream URL (could be base64 or URL-encoded)
+        try:
+            decoded_url = base64.b64decode(stream_url).decode('utf-8')
+        except:
+            try:
+                decoded_url = unquote(stream_url)
+            except:
+                decoded_url = stream_url
+        
+        log(f'🔄 Proxying stream from: {decoded_url[:80]}...')
+        response = requests.get(decoded_url, stream=True, timeout=60)
+        
+        if response.status_code != 200:
+            log(f'❌ Stream error: {response.status_code}')
+            return jsonify({'error': f'Stream error: {response.status_code}'}), 502
+        
+        log(f'✅ Streaming video...')
+        
+        # Stream the response back to the client
+        def generate():
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        
+        return generate(), 200, {
+            'Content-Type': response.headers.get('content-type', 'video/mp4'),
+            'Content-Length': response.headers.get('content-length', ''),
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'public, max-age=3600',
+            'Access-Control-Allow-Origin': '*'
+        }
+    except Exception as e:
+        log(f'❌ Stream proxy error: {str(e)}')
+        return jsonify({'error': 'Stream failed', 'message': str(e)}), 500
 
 @app.route('/api/search/youtube')
 def search():
