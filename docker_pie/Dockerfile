@@ -33,17 +33,24 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application files
 COPY app.py .
 COPY static ./static/
-COPY cookies.txt .
+COPY cookies.txt . 2>/dev/null || echo "# Cookies file optional" > /dev/null
 
 # Create necessary directories
-RUN mkdir -p /tmp/proxyLogs /tmp/videos
+RUN mkdir -p /tmp/proxyLogs /tmp/videos && \
+    # Ensure cookies are readable if they exist
+    test -f /app/cookies.txt && chmod 644 /app/cookies.txt || true && \
+    # Create symlink for backward compatibility
+    test -f /app/cookies.txt && ln -sf /app/cookies.txt /tmp/cookies.txt || true
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-5000}/health || exit 1
 
 # Expose port (use Render/Koyeb PORT env var)
-ENV PORT=5000
+ENV PORT=5000 \
+    COOKIES_FILE=/app/cookies.txt \
+    LOG_DIR=/tmp/proxyLogs
+
 EXPOSE 5000
 
 # Start the application with proper environment

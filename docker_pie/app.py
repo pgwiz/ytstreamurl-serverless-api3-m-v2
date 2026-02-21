@@ -19,7 +19,8 @@ app = Flask(__name__, static_url_path='/static', static_folder='static')
 
 # Configuration
 LOG_DIR = os.environ.get('LOG_DIR', '/tmp/proxyLogs')
-COOKIES_FILE = os.environ.get('COOKIES_FILE', '/tmp/cookies.txt')
+# Check multiple locations for cookies (Docker, Koyeb, local)
+COOKIES_FILE = os.environ.get('COOKIES_FILE') or os.path.exists('/app/cookies.txt') and '/app/cookies.txt' or '/tmp/cookies.txt'
 REQUEST_TIMEOUT = int(os.environ.get('REQUEST_TIMEOUT', '60'))
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get('PORT', '5000'))
 
@@ -51,16 +52,38 @@ def get_cookie_file_path():
     if COOKIE_MANAGER['loaded'] and COOKIE_MANAGER['path'] and os.path.exists(COOKIE_MANAGER['path']):
         return COOKIE_MANAGER['path']
     
-    cookie_data = None
-    if os.path.exists(COOKIES_FILE):
-        try:
-            with open(COOKIES_FILE, "r", encoding='utf-8') as f:
-                cookie_data = f.read()
-        except:
-            pass
-    else:
-        cookie_data = os.environ.get("YTDLP_COOKIES")
-
+    # Check multiple possible locations
+    possible_paths = [
+        '/app/cookies.txt',           # Docker image location
+        '/tmp/cookies.txt',           # Docker compose mount
+        COOKIES_FILE,                 # Environment variable
+        'cookies.txt'                 # Local directory
+    ]
+    
+    # Return first existing path
+    for path in possible_paths:
+        if path and os.path.exists(path):
+            try:
+                with open(path, "r", encoding='utf-8') as f:
+                    cookie_data = f.read()
+                if cookie_data.strip():
+                    temp_dir = tempfile.gettempdir()
+                    cookie_path = os.path.join(temp_dir, "yt_cookies_reusable.txt")
+                    
+                    if not os.path.exists(cookie_path):
+                        with open(cookie_path, "w", encoding='utf-8') as f:
+                            f.write(cookie_data)
+                    
+                    COOKIE_MANAGER['path'] = cookie_path
+                    COOKIE_MANAGER['loaded'] = True
+                    log(f'🍪 Cookies loaded from: {path} ({len(cookie_data)} bytes)')
+                    return cookie_path
+            except Exception as e:
+                log(f'⚠️ Failed to load cookies from {path}: {e}')
+                continue
+    
+    # Try environment variable
+    cookie_data = os.environ.get("YTDLP_COOKIES")
     if cookie_data:
         try:
             temp_dir = tempfile.gettempdir()
@@ -72,11 +95,12 @@ def get_cookie_file_path():
             
             COOKIE_MANAGER['path'] = cookie_path
             COOKIE_MANAGER['loaded'] = True
-            log(f'🍪 Cookies loaded from: {cookie_path}')
+            log(f'🍪 Cookies loaded from environment (YTDLP_COOKIES)')
             return cookie_path
         except Exception as e:
-            log(f'⚠️ Cookie loading failed: {e}')
-            return None
+            log(f'⚠️ Cookie loading from env failed: {e}')
+    
+    log('⚠️ No cookies found - authentication may be required')
     return None
 
 def extract_youtube_stream(video_id):

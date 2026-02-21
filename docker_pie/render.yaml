@@ -10,7 +10,8 @@ services:
       - key: ENV
         value: production
       - key: REQUEST_TIMEOUT
-        value: 90      - key: COOKIES_FILE
-        value: /tmp/cookies.txt
+        value: 90
+      - key: COOKIES_FILE
+        value: /app/cookies.txt
       - key: LOG_DIR
         value: /tmp/proxyLogs
