@@ -140,9 +140,6 @@ function extractStream() {
                                 <button onclick="playStreamProxy()" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-xs font-bold transition">
                                     ▶️ Play
                                 </button>
-                                <button onclick="downloadVideo()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs font-bold transition">
-                                    ⬇️ Download
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -214,29 +211,6 @@ function playStreamProxy() {
     videoSource.src = proxyUrl;
     videoPlayer.load();
     videoPlayer.play();
-}
-
-function downloadVideo() {
-    if (!window.currentVideoInfo) {
-        alert('No video selected');
-        return;
-    }
-    
-    const { title, proxyUrl } = window.currentVideoInfo;
-    const filename = `${title.replace(/[^\w\s-]/g, '')}.mp4`;
-    
-    // Use proxy URL for download (goes through server)
-    const downloadUrl = proxyUrl || window.currentVideoInfo.url;
-    
-    // Create a hidden anchor element and trigger download
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    alert(`⬇️ Download started for: ${title}\n📡 Using proxy URL for download`);
 }
 
 function closePlayer() {
