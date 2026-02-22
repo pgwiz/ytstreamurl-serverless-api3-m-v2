@@ -12,6 +12,8 @@ import tempfile
 import requests
 import base64
 import hashlib
+import asyncio
+import threading
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, render_template_string
 from urllib.parse import quote, unquote
@@ -21,6 +23,11 @@ app = Flask(__name__, static_url_path='/static', static_folder='static')
 # URL Cache for proxy streaming (maps short ID -> full URL)
 # Reduces proxy URL length from 2000+ chars to ~50 chars
 url_cache = {}
+
+# Extraction Result Cache (maps video_id -> extraction result)
+# Avoids re-extracting the same video within TTL
+extraction_cache = {}
+CACHE_TTL = 3600  # 1 hour
 
 # ===== INLINE: YoutubeExtractor Class =====
 class YoutubeExtractor:
@@ -252,6 +259,48 @@ def cache_stream_url(url):
     url_cache[url_hash] = url
     return url_hash
 
+def get_cached_extraction(video_id):
+    """Get cached extraction result if available and not expired"""
+    if video_id in extraction_cache:
+        cached = extraction_cache[video_id]
+        if (datetime.now() - cached['timestamp']).total_seconds() < CACHE_TTL:
+            log(f'⚡ Cache HIT for {video_id}')
+            return cached['result']
+        else:
+            del extraction_cache[video_id]  # Expired
+    return None
+
+def set_cached_extraction(video_id, result):
+    """Cache extraction result with timestamp"""
+    extraction_cache[video_id] = {
+        'result': result,
+        'timestamp': datetime.now()
+    }
+
+# Start background cleanup thread for expired cache entries
+def cleanup_expired_cache():
+    """Background thread to clean up expired cache entries"""
+    while True:
+        try:
+            threading.Event().wait(60)  # Check every 60 seconds
+            expired = []
+            for vid, cached in list(extraction_cache.items()):
+                age = (datetime.now() - cached['timestamp']).total_seconds()
+                if age > CACHE_TTL:
+                    expired.append(vid)
+            
+            for vid in expired:
+                del extraction_cache[vid]
+            
+            if expired:
+                log(f'🧹 Cleaned {len(expired)} expired cache entries')
+        except:
+            pass
+
+# Start cleanup thread as daemon (runs in background, won't block shutdown)
+cleanup_thread = threading.Thread(target=cleanup_expired_cache, daemon=True)
+cleanup_thread.start()
+
 @app.route('/')
 def index():
     """Serve the playground UI"""
@@ -268,7 +317,13 @@ def get_stream(video_id):
     if not video_id or len(video_id) < 10:
         return jsonify({'error': 'Invalid video ID'}), 400
     
-    result = extract_youtube_stream(video_id)
+    # Check extraction cache first
+    cached_result = get_cached_extraction(video_id)
+    is_cached = bool(cached_result)
+    result = cached_result or extract_youtube_stream(video_id)
+    
+    if result and not is_cached:
+        set_cached_extraction(video_id, result)
     
     if result:
         # Use cached short ID instead of full base64 encoding
@@ -277,8 +332,14 @@ def get_stream(video_id):
             cache_id = cache_stream_url(stream_url)
             result['proxy_url'] = f"/stream/play?id={cache_id}"
             result['cache_id'] = cache_id
+            result['cached'] = is_cached
         
-        return jsonify(result)
+        # Add cache headers
+        cache_control = 'public, max-age=3600' if is_cached else 'public, max-age=300'
+        response = jsonify(result)
+        response.headers['Cache-Control'] = cache_control
+        response.headers['X-Cache'] = 'HIT' if is_cached else 'MISS'
+        return response
     else:
         return jsonify({
             'error': 'Failed to extract stream',
@@ -292,7 +353,13 @@ def stream_handler(video_id):
     if not video_id or len(video_id) < 10:
         return jsonify({'error': 'Invalid video ID'}), 400
     
-    result = extract_youtube_stream(video_id)
+    # Check extraction cache first
+    cached_result = get_cached_extraction(video_id)
+    is_cached = bool(cached_result)
+    result = cached_result or extract_youtube_stream(video_id)
+    
+    if result and not is_cached:
+        set_cached_extraction(video_id, result)
     
     if result:
         # Use cached short ID instead of full base64 encoding
@@ -301,9 +368,15 @@ def stream_handler(video_id):
             cache_id = cache_stream_url(stream_url)
             result['proxy_url'] = f"/stream/play?id={cache_id}"
             result['cache_id'] = cache_id
+            result['cached'] = is_cached
             result['message'] = f"Video extracted successfully. Use proxy_url for server-side streaming."
         
-        return jsonify(result), 200
+        # Add cache headers
+        cache_control = 'public, max-age=3600' if is_cached else 'public, max-age=300'
+        response = jsonify(result)
+        response.headers['Cache-Control'] = cache_control
+        response.headers['X-Cache'] = 'HIT' if is_cached else 'MISS'
+        return response, 200
     else:
         return jsonify({
             'error': 'Failed to extract stream',

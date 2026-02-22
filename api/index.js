@@ -31,6 +31,13 @@ const urlCache = new LRUCache({
     ttl: 1000 * 60 * 60 // 1 hour
 });
 
+// Extraction Result Cache (maps video_id -> extraction result)
+// Avoids re-extracting the same video within TTL
+const extractionCache = new LRUCache({
+    max: 128,
+    ttl: 1000 * 60 * 60 // 1 hour (reuse extractions)
+});
+
 // Spotify token cache
 let spotifyAccessToken = null;
 let spotifyTokenExpiry = 0;
@@ -82,6 +89,16 @@ function cacheStreamUrl(url) {
     const urlHash = crypto.createHash('md5').update(url).digest('hex').substring(0, 12);
     urlCache.set(urlHash, url);
     return urlHash;
+}
+
+// Get cached extraction result
+function getCachedExtraction(videoId) {
+    return extractionCache.get(videoId);
+}
+
+// Set cached extraction result
+function setCachedExtraction(videoId, result) {
+    extractionCache.set(videoId, result);
 }
 
 // ---------------------------------------------------------
@@ -889,8 +906,11 @@ const streamHandler = async (req, res) => {
     const { videoId } = req.params;
 
     try {
-        // If DIGITALOCEAN_URL is set, use the serverless function as primary source
-        if (process.env.DIGITALOCEAN_URL) {
+        // Check extraction cache first (instant response for repeated requests)
+        let result = getCachedExtraction(videoId);
+        const isCached = !!result;
+        
+        if (!result && process.env.DIGITALOCEAN_URL) {
             // Normalize the user-provided DIGITALOCEAN_URL. Users may set the full function URL
             // including '/default/serverless_handler' as shown in docs, or just the domain.
             const base = process.env.DIGITALOCEAN_URL.replace(/\/+$/, '');
@@ -923,12 +943,20 @@ const streamHandler = async (req, res) => {
                     const cacheId = cacheStreamUrl(directUrl);
                     const proxyUrl = `/stream/play?id=${cacheId}`;
                     
+                    // Cache the result and add cache headers
+                    setCachedExtraction(videoId, doBody);
+                    res.set({
+                        'Cache-Control': isCached ? 'public, max-age=3600' : 'public, max-age=300',
+                        'X-Cache': isCached ? 'HIT' : 'MISS'
+                    });
+                    
                     return res.json({
                         videoId,
                         streamUrl: doBody.url,
                         url: doBody.url, // Include both for compatibility
                         proxy_url: proxyUrl,
                         cache_id: cacheId,
+                        cached: isCached,
                         title: doBody.title || 'Unknown',
                         uploader: doBody.uploader || 'Unknown',
                         duration: doBody.duration || 'Unknown',
@@ -950,8 +978,13 @@ const streamHandler = async (req, res) => {
         }
 
         // Fallback: use local extraction
-        const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const result = await extractMediaInfo(youtubeUrl);
+        if (!result) {
+            const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            result = await extractMediaInfo(youtubeUrl);
+            if (result) {
+                setCachedExtraction(videoId, result);
+            }
+        }
 
         if (result && result.tracks && result.tracks.length > 0) {
             const track = result.tracks[0];
@@ -961,12 +994,19 @@ const streamHandler = async (req, res) => {
                 const cacheId = cacheStreamUrl(directUrl);
                 const proxyUrl = `/stream/play?id=${cacheId}`;
                 
+                // Add cache headers and cached flag
+                res.set({
+                    'Cache-Control': isCached ? 'public, max-age=3600' : 'public, max-age=300',
+                    'X-Cache': isCached ? 'HIT' : 'MISS'
+                });
+                
                 return res.json({
                     videoId,
                     streamUrl: track.url,
                     url: track.url,
                     proxy_url: proxyUrl,
                     cache_id: cacheId,
+                    cached: isCached,
                     title: track.title || 'Unknown',
                     uploader: track.uploader || 'Unknown',
                     duration: track.duration || 'Unknown',
